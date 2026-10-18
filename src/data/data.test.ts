@@ -44,3 +44,13 @@ describe('baza produktów', () => {
     expect(bad).toEqual([])
   })
 })
+
+describe('szczegóły produktów lokalnych', () => {
+  it('każdy produkt ma cukry, tłuszcze nasycone, sól i mikroskładniki', () => {
+    for (const f of LOCAL_FOODS) {
+      expect(f.micro, f.name).toBeTruthy()
+      expect(f.sugar! <= f.c + 0.5, `${f.name}: cukry > węgle`).toBe(true)
+      expect(f.satFat! <= f.f + 0.5, `${f.name}: nasycone > tłuszcz`).toBe(true)
+    }
+  })
+})

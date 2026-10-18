@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { HeatMap } from '../components/BodyMap'
 import { Icon } from '../components/Icon'
 import { LineChart } from '../components/LineChart'
@@ -11,9 +11,12 @@ import { addDays, fmtDate, fmtShort, isoDate, num, weekStart } from '../lib/form
 import { useExercises } from '../lib/hooks'
 import { e1rm, exerciseHistory, records, workingSets } from '../lib/progression'
 import { volumeStatus, weeklySets } from '../lib/stats'
+import { useProfile } from '../lib/hooks'
+import { analyzeWeight, weeklyAverages } from '../lib/weight'
+import { InsightsTab } from './Insights'
 import type { BodyEntry, MuscleId } from '../types'
 
-type Tab = 'body' | 'strength' | 'volume'
+type Tab = 'body' | 'strength' | 'volume' | 'insights'
 
 function readTab(): Tab {
   try {
@@ -24,7 +27,8 @@ function readTab(): Tab {
 }
 
 export function Progress() {
-  const [tab, setTabState] = useState<Tab>(readTab)
+  const [params] = useSearchParams()
+  const [tab, setTabState] = useState<Tab>((params.get('tab') as Tab) || readTab())
   const setTab = (t: Tab) => {
     setTabState(t)
     try {
@@ -36,10 +40,11 @@ export function Progress() {
   return (
     <div className="page">
       <PageHead title="Postęp" />
-      <Seg<Tab> value={tab} onChange={setTab} options={[{ value: 'volume', label: 'Objętość' }, { value: 'strength', label: 'Siła' }, { value: 'body', label: 'Ciało' }]} />
+      <Seg<Tab> value={tab} onChange={setTab} options={[{ value: 'volume', label: 'Objętość' }, { value: 'strength', label: 'Siła' }, { value: 'body', label: 'Ciało' }, { value: 'insights', label: 'Wnioski' }]} />
       {tab === 'volume' && <VolumeTab />}
       {tab === 'strength' && <StrengthTab />}
       {tab === 'body' && <BodyTab />}
+      {tab === 'insights' && <InsightsTab />}
     </div>
   )
 }
@@ -198,6 +203,7 @@ const MEASURES: { k: keyof BodyEntry; label: string; unit: string }[] = [
 
 function BodyTab() {
   const entries = useLiveQuery(() => db.body.orderBy('date').toArray(), [], [])
+  const profile = useProfile() ?? undefined
   const [range, setRange] = useState<'30' | '90' | 'all'>('90')
   const [metric, setMetric] = useState<keyof BodyEntry>('weight')
   const [adding, setAdding] = useState(false)
@@ -205,16 +211,10 @@ function BodyTab() {
   const m = MEASURES.find((x) => x.k === metric)!
   const pts = entries.filter((e) => e.date >= from && typeof e[metric] === 'number').map((e) => ({ date: e.date, value: e[metric] as number }))
 
-  // tempo zmiany wagi: średnia z ostatnich 7 dni vs 7 dni wcześniej
-  const w = entries.filter((e) => e.weight)
-  const avg = (a: string, b: string) => {
-    const x = w.filter((e) => e.date > a && e.date <= b).map((e) => e.weight!)
-    return x.length ? x.reduce((s, v) => s + v, 0) / x.length : undefined
-  }
   const today = isoDate()
-  const nowAvg = avg(addDays(today, -7), today)
-  const prevAvg = avg(addDays(today, -14), addDays(today, -7))
-  const delta = nowAvg !== undefined && prevAvg !== undefined ? nowAvg - prevAvg : undefined
+  const trend = analyzeWeight(entries, today, profile)
+  const weeks = weeklyAverages(entries, today, 8)
+  const withAvg = weeks.filter((w) => w.avg !== undefined)
 
   return (
     <>
@@ -229,12 +229,42 @@ function BodyTab() {
           <Seg value={range} onChange={setRange} options={[{ value: '30', label: '30 dni' }, { value: '90', label: '90 dni' }, { value: 'all', label: 'Całość' }]} />
         </div>
         {pts.length ? <LineChart points={pts} unit={m.unit} /> : <div className="small muted">Brak pomiarów w tym okresie.</div>}
-        {metric === 'weight' && delta !== undefined && (
-          <div className="small">
-            Średnia tygodniowa: <b className="num">{num(nowAvg)} kg</b> ({delta >= 0 ? '+' : ''}{num(delta, 2)} kg vs poprzedni tydzień, {num((delta / prevAvg!) * 100, 2)}%)
-          </div>
-        )}
       </div>
+      {metric === 'weight' && (
+        <>
+          {trend ? (
+            <div className={'note ' + (trend.verdict.tone === 'good' ? 'good' : trend.verdict.tone === 'warn' ? 'warn' : '')}>
+              <b>{trend.verdict.title}</b>
+              <div className="small" style={{ marginTop: 2 }}>{trend.verdict.text}</div>
+              {trend.change4w !== undefined && (
+                <div className="small muted" style={{ marginTop: 4 }}>
+                  Średnia z ostatniego tygodnia vs sprzed 4 tygodni: <b className="num">{trend.change4w > 0 ? '+' : ''}{num(trend.change4w, 2)} kg</b>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="note small">Waż się min. 3–4 razy w tygodniu przez 2 tygodnie, a ocenię tempo zmian i postęp względem celu.</div>
+          )}
+          {withAvg.length > 0 && (
+            <div className="card stack" style={{ gap: 8 }}>
+              <h3>Średnie tygodniowe</h3>
+              {weeks.slice().reverse().map((w, i, arr) => {
+                const prev = arr.slice(i + 1).find((x) => x.avg !== undefined)
+                const d = w.avg !== undefined && prev?.avg !== undefined ? w.avg - prev.avg : undefined
+                return w.avg === undefined ? null : (
+                  <div key={w.ws} className="hstack small">
+                    <span style={{ flex: 1 }}>{i === 0 ? 'Ten tydzień' : `od ${fmtShort(w.ws)}`} <span className="tiny muted">({w.n} pom.)</span></span>
+                    <b className="num">{num(w.avg, 1)} kg</b>
+                    <span className="num tiny" style={{ minWidth: 64, textAlign: 'right', color: d === undefined ? 'var(--text-3)' : 'var(--text-2)' }}>
+                      {d === undefined ? '' : `${d > 0 ? '+' : ''}${num(d, 2)}`}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
       <button className="btn primary block" onClick={() => setAdding(true)}><Icon name="plus" /> Dodaj pomiar</button>
       <div className="tiny muted">Waż się rano, po toalecie, przed jedzeniem. Obwody mierz raz na 1–2 tygodnie w tych samych warunkach.</div>
       {entries.length > 0 && (

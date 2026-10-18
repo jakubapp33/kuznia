@@ -1,13 +1,16 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { BarcodeScanner } from '../components/BarcodeScanner'
 import { Icon } from '../components/Icon'
-import { NumInput, Seg, Sheet, TopBar } from '../components/ui'
+import { Nutrients } from '../components/Nutrients'
+import { MacroTiles, NumInput, Seg, Sheet, TopBar } from '../components/ui'
 import { LOCAL_FOODS } from '../data/foods'
 import { db } from '../db/db'
+import { MEAL_TIMES, nowTime, scaleFood } from '../lib/foodcalc'
 import { isoDate, num } from '../lib/format'
 import { lookupBarcode, searchOff } from '../lib/off'
+import { STORES, findBarcode, loadProducts, searchProducts } from '../lib/products'
 import { norm } from '../lib/search'
 import type { Food } from '../types'
 import { MEALS } from './Diet'
@@ -21,6 +24,7 @@ export function FoodAdd() {
   const date = params.get('d') ?? isoDate()
   const [tab, setTab] = useState<Tab>('search')
   const [picked, setPicked] = useState<Food | null>(null)
+  const defaultTime = date === isoDate() ? nowTime() : MEAL_TIMES[meal] ?? '12:00'
 
   const done = () => nav(`/dieta${date === isoDate() ? '' : `?d=${date}`}`, { replace: true })
 
@@ -38,8 +42,8 @@ export function FoodAdd() {
       />
       {tab === 'search' && <SearchTab onPick={setPicked} />}
       {tab === 'scan' && <ScanTab onPick={setPicked} />}
-      {tab === 'quick' && <QuickTab meal={meal} date={date} onDone={done} />}
-      {picked && <AmountSheet food={picked} meal={meal} date={date} onClose={() => setPicked(null)} onDone={done} />}
+      {tab === 'quick' && <QuickTab meal={meal} date={date} defaultTime={defaultTime} onDone={done} />}
+      {picked && <AmountSheet food={picked} meal={meal} date={date} defaultTime={defaultTime} onClose={() => setPicked(null)} onDone={done} />}
     </div>
   )
 }
@@ -50,7 +54,7 @@ function FoodRow({ f, onClick }: { f: Food; onClick: () => void }) {
       <div className="grow">
         <div className="title small">{f.fav ? '★ ' : ''}{f.name}</div>
         <div className="food-macros">
-          {f.brand ? `${f.brand} · ` : ''}100 g: <b>{f.kcal} kcal</b> · B {num(f.p)} · W {num(f.c)} · T {num(f.f)}
+          {f.brand ? <b>{f.brand} · </b> : ''}{f.kcal} kcal · B {num(f.p)} · W {num(f.c)} · T {num(f.f)} <span className="muted">/100 g</span>
         </div>
       </div>
       <Icon name="plus" className="chev" size={18} />
@@ -60,27 +64,44 @@ function FoodRow({ f, onClick }: { f: Food; onClick: () => void }) {
 
 function SearchTab({ onPick }: { onPick: (f: Food) => void }) {
   const [q, setQ] = useState('')
+  const [store, setStore] = useState('')
+  const [big, setBig] = useState<Food[]>([])
+  const [dbState, setDbState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [online, setOnline] = useState<Food[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const abort = useRef<AbortController | null>(null)
   const saved = useLiveQuery(() => db.foods.toArray(), [], [])
 
-  const results = useMemo(() => {
+  useEffect(() => {
+    loadProducts().then(() => setDbState('ready'), () => setDbState('error'))
+  }, [])
+
+  // wyszukiwanie w dużej bazie (offline) z lekkim opóźnieniem
+  useEffect(() => {
+    if (dbState !== 'ready' || (!q.trim() && !store)) {
+      setBig([])
+      return
+    }
+    const t = setTimeout(() => void searchProducts(q, store).then(setBig), 150)
+    return () => clearTimeout(t)
+  }, [q, store, dbState])
+
+  const mine = useMemo(() => {
     const words = norm(q).split(/\s+/).filter(Boolean)
+    if (store) return []
     const savedIds = new Set(saved.map((f) => f.id))
-    const pool = [...saved, ...LOCAL_FOODS.filter((f) => !savedIds.has(f.id))]
     if (!words.length) {
       return saved.filter((f) => f.lastUsed || f.fav).sort((a, b) => (b.fav ?? 0) - (a.fav ?? 0) || (b.lastUsed ?? 0) - (a.lastUsed ?? 0)).slice(0, 30)
     }
-    return pool
-      .filter((f) => {
-        const hay = norm(f.name + ' ' + (f.brand ?? ''))
-        return words.every((w) => hay.includes(w))
-      })
+    return [...saved, ...LOCAL_FOODS.filter((f) => !savedIds.has(f.id))]
+      .filter((f) => words.every((w) => norm(f.name + ' ' + (f.brand ?? '')).includes(w)))
       .sort((a, b) => (b.fav ?? 0) - (a.fav ?? 0) || (b.lastUsed ?? 0) - (a.lastUsed ?? 0))
-      .slice(0, 50)
-  }, [q, saved])
+      .slice(0, 30)
+  }, [q, saved, store])
+
+  const mineIds = new Set(mine.map((f) => f.id))
+  const bigFiltered = big.filter((f) => !mineIds.has(f.id))
 
   async function searchOnline() {
     if (q.trim().length < 2) return
@@ -91,7 +112,7 @@ function SearchTab({ onPick }: { onPick: (f: Food) => void }) {
     try {
       setOnline(await searchOff(q.trim(), abort.current.signal))
     } catch (e) {
-      if ((e as Error).name !== 'AbortError') setErr(navigator.onLine ? (e as Error).message : 'Brak internetu – wyszukiwanie online nie działa offline.')
+      if ((e as Error).name !== 'AbortError') setErr(navigator.onLine ? 'Wyszukiwarka Open Food Facts chwilowo nie odpowiada. Spróbuj później albo zeskanuj kod kreskowy.' : 'Brak internetu.')
     } finally {
       setLoading(false)
     }
@@ -99,47 +120,63 @@ function SearchTab({ onPick }: { onPick: (f: Food) => void }) {
 
   return (
     <>
-      <form
-        className="search"
-        onSubmit={(e) => {
-          e.preventDefault()
-          void searchOnline()
-        }}
-      >
+      <form className="search" onSubmit={(e) => { e.preventDefault(); (document.activeElement as HTMLElement)?.blur() }}>
         <Icon name="search" size={18} />
-        <input className="input" type="search" enterKeyHint="search" placeholder="Np. skyr, owsianka, pierś z kurczaka" value={q} onChange={(e) => { setQ(e.target.value); setOnline(null) }} autoFocus />
+        <input className="input" type="search" enterKeyHint="search" placeholder="Np. skyr pilos, owsianka, kurczak" value={q} onChange={(e) => { setQ(e.target.value); setOnline(null) }} autoFocus />
       </form>
+      <div className="chips">
+        <button className={'chip' + (store === '' ? ' on' : '')} onClick={() => setStore('')}>Wszystkie</button>
+        {STORES.map((s) => (
+          <button key={s.id} className={'chip' + (store === s.id ? ' on' : '')} onClick={() => setStore(store === s.id ? '' : s.id)}>{s.name}</button>
+        ))}
+      </div>
+      {store && <div className="tiny muted" style={{ marginTop: -6 }}>Produkty marek własnych sieci {STORES.find((s) => s.id === store)?.name}. Produkty innych marek (np. Piątnica, Danone) znajdziesz w „Wszystkie”.</div>}
 
-      {!q && results.length > 0 && <div className="section-title">Ostatnio używane</div>}
-      {!q && results.length === 0 && (
-        <div className="card small muted">Wpisz nazwę produktu. Najpierw przeszukuję wbudowaną bazę (działa offline), a przyciskiem poniżej – bazę Open Food Facts z produktami ze sklepów.</div>
-      )}
-      {results.length > 0 && (
-        <div className="card flush list">
-          {results.map((f) => <FoodRow key={f.id} f={f} onClick={() => onPick(f)} />)}
+      {!q && !store && mine.length > 0 && <div className="section-title">Ostatnio używane i ulubione</div>}
+      {!q && !store && mine.length === 0 && (
+        <div className="card small muted">
+          Wpisz nazwę lub markę produktu. Przeszukuję ok. 12 tysięcy produktów ze sklepów oraz podstawowe produkty (warzywa, mięso, kasze) – działa także bez internetu.
         </div>
       )}
+      {mine.length > 0 && (
+        <div className="card flush list">
+          {mine.map((f) => <FoodRow key={f.id} f={f} onClick={() => onPick(f)} />)}
+        </div>
+      )}
+      {dbState === 'loading' && (q || store) && <div className="small muted" style={{ textAlign: 'center' }}>Wczytuję bazę produktów…</div>}
+      {dbState === 'error' && <div className="note warn small">Nie udało się wczytać bazy produktów. Połącz się z internetem i otwórz tę stronę ponownie – potem baza działa offline.</div>}
+      {bigFiltered.length > 0 && (
+        <>
+          <div className="section-title">Produkty ze sklepów{bigFiltered.length >= 60 ? ' · doprecyzuj wyszukiwanie' : ''}</div>
+          <div className="card flush list">
+            {bigFiltered.map((f) => <FoodRow key={f.id} f={f} onClick={() => onPick(f)} />)}
+          </div>
+        </>
+      )}
+      {q.trim().length >= 2 && dbState === 'ready' && mine.length + bigFiltered.length === 0 && !online && (
+        <div className="card empty small">Brak w bazie. Spróbuj krótszej nazwy, zeskanuj kod albo poszukaj online.</div>
+      )}
 
-      {q.trim().length >= 2 && (
+      {q.trim().length >= 2 && !store && (
         <button className="btn block" onClick={searchOnline} disabled={loading}>
-          <Icon name="search" size={18} /> {loading ? 'Szukam…' : 'Szukaj produktów ze sklepów (online)'}
+          <Icon name="search" size={18} /> {loading ? 'Szukam…' : 'Szukaj też online (Open Food Facts)'}
         </button>
       )}
       {err && <div className="note warn small">{err}</div>}
       {online && (
         <>
-          <div className="section-title">Open Food Facts · {online.length}</div>
+          <div className="section-title">Online · {online.length}</div>
           {online.length ? (
             <div className="card flush list">
               {online.map((f) => <FoodRow key={f.id} f={f} onClick={() => onPick(f)} />)}
             </div>
           ) : (
-            <div className="card empty small">Nic nie znaleziono. Spróbuj innej nazwy albo dodaj produkt ręcznie.</div>
+            <div className="card empty small">Nic nie znaleziono.</div>
           )}
-          <div className="tiny muted">Dane z otwartej bazy tworzonej przez użytkowników – sprawdź z etykietą, jeśli coś wygląda dziwnie.</div>
         </>
       )}
       <Link to="/dieta/produkt" className="btn ghost block"><Icon name="plus" size={18} /> Dodaj własny produkt</Link>
+      <div className="tiny muted" style={{ textAlign: 'center' }}>Baza produktów: Open Food Facts (licencja ODbL). Dane tworzą użytkownicy – w razie wątpliwości sprawdź etykietę.</div>
     </>
   )
 }
@@ -155,7 +192,7 @@ function ScanTab({ onPick }: { onPick: (f: Food) => void }) {
     setCode(c)
     setStatus('loading')
     try {
-      const local = await db.foods.where('barcode').equals(c).first()
+      const local = (await db.foods.where('barcode').equals(c).first()) ?? (await findBarcode(c))
       if (local) {
         setStatus('idle')
         onPick(local)
@@ -168,7 +205,7 @@ function ScanTab({ onPick }: { onPick: (f: Food) => void }) {
       } else setStatus('notfound')
     } catch (e) {
       setStatus('error')
-      setMsg(navigator.onLine ? (e as Error).message : 'Brak internetu – nie mogę sprawdzić kodu.')
+      setMsg(navigator.onLine ? (e as Error).message : 'Tego kodu nie ma w bazie offline, a nie ma internetu, by sprawdzić online.')
     }
   }, [onPick])
 
@@ -180,6 +217,7 @@ function ScanTab({ onPick }: { onPick: (f: Food) => void }) {
         <div className="card stack">
           <div>Produktu o kodzie <b className="num">{code}</b> nie ma w bazie.</div>
           <Link to={`/dieta/produkt?barcode=${code}`} className="btn primary block">Dodaj go ręcznie (z etykiety)</Link>
+          <div className="tiny muted">Zapisany produkt będzie się już rozpoznawał przy kolejnym skanowaniu.</div>
         </div>
       )}
       {status === 'error' && <div className="note warn small">{msg}</div>}
@@ -194,15 +232,25 @@ function ScanTab({ onPick }: { onPick: (f: Food) => void }) {
   )
 }
 
-function QuickTab({ meal, date, onDone }: { meal: number; date: string; onDone: () => void }) {
+function TimeField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="field">
+      <span>Godzina posiłku</span>
+      <input className="input" type="time" value={value} onChange={(e) => onChange(e.target.value || value)} />
+    </label>
+  )
+}
+
+function QuickTab({ meal, date, defaultTime, onDone }: { meal: number; date: string; defaultTime: string; onDone: () => void }) {
   const [name, setName] = useState('')
   const [kcal, setKcal] = useState<number | undefined>()
   const [p, setP] = useState<number | undefined>()
   const [f, setF] = useState<number | undefined>()
   const [c, setC] = useState<number | undefined>()
+  const [time, setTime] = useState(defaultTime)
   const calc = (p ?? 0) * 4 + (f ?? 0) * 9 + (c ?? 0) * 4
   async function save() {
-    await db.foodLog.add({ date, meal, name: name.trim() || 'Szybki wpis', kcal: kcal ?? calc, p: p ?? 0, f: f ?? 0, c: c ?? 0 })
+    await db.foodLog.add({ date, time, meal, name: name.trim() || 'Szybki wpis', kcal: kcal ?? calc, p: p ?? 0, f: f ?? 0, c: c ?? 0 })
     onDone()
   }
   return (
@@ -214,22 +262,24 @@ function QuickTab({ meal, date, onDone }: { meal: number; date: string; onDone: 
         <label className="field"><span>Tłuszcz g</span><NumInput value={f} onChange={setF} /></label>
       </div>
       <label className="field"><span>Kalorie</span><NumInput value={kcal} onChange={setKcal} placeholder={calc ? `${Math.round(calc)} (z makro)` : 'kcal'} /></label>
+      <TimeField value={time} onChange={setTime} />
       <button className="btn primary lg block" disabled={!kcal && !calc} onClick={save}>Dodaj</button>
     </div>
   )
 }
 
-function AmountSheet({ food, meal, date, onClose, onDone }: { food: Food; meal: number; date: string; onClose: () => void; onDone: () => void }) {
+function AmountSheet({ food, meal, date, defaultTime, onClose, onDone }: { food: Food; meal: number; date: string; defaultTime: string; onClose: () => void; onDone: () => void }) {
   const [grams, setGrams] = useState<number | undefined>(food.portion ?? 100)
   const [m, setM] = useState(meal)
+  const [time, setTime] = useState(defaultTime)
   const stored = useLiveQuery(() => db.foods.get(food.id), [food.id])
   const fav = stored?.fav === 1
   const g = grams ?? 0
-  const k = g / 100
+  const v = scaleFood(food, g)
   async function add() {
     if (!g) return
     await db.foods.put({ ...food, ...(stored ?? {}), lastUsed: Date.now() })
-    await db.foodLog.add({ date, meal: m, foodId: food.id, name: food.name + (food.brand ? ` (${food.brand})` : ''), grams: g, kcal: food.kcal * k, p: food.p * k, f: food.f * k, c: food.c * k })
+    await db.foodLog.add({ date, time, meal: m, foodId: food.id, name: food.name + (food.brand ? ` (${food.brand})` : ''), grams: g, ...v })
     onDone()
   }
   async function toggleFav() {
@@ -246,22 +296,23 @@ function AmountSheet({ food, meal, date, onClose, onDone }: { food: Food; meal: 
       <div className="hstack wrap" style={{ gap: 6 }}>
         {quick.map((q) => (
           <button key={q} className={'chip' + (g === q ? ' on' : '')} onClick={() => setGrams(q)}>
-            {q === food.portion && food.portionName ? `${food.portionName} (${q} g)` : `${q} g`}
+            {q === food.portion && food.portionName ? `${food.portionName} (${q} g)` : q === food.portion ? `porcja (${q} g)` : `${q} g`}
           </button>
         ))}
       </div>
-      <div className="card grid3" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
-        <div className="stat"><span className="v" style={{ fontSize: 20 }}>{Math.round(food.kcal * k)}</span><span className="l">kcal</span></div>
-        <div className="stat"><span className="v" style={{ fontSize: 20, color: 'var(--prot)' }}>{num(food.p * k)}</span><span className="l">białko</span></div>
-        <div className="stat"><span className="v" style={{ fontSize: 20, color: 'var(--carb)' }}>{num(food.c * k)}</span><span className="l">węgle</span></div>
-        <div className="stat"><span className="v" style={{ fontSize: 20, color: 'var(--fat)' }}>{num(food.f * k)}</span><span className="l">tłuszcz</span></div>
+      <MacroTiles kcal={v.kcal} p={v.p} c={v.c} f={v.f} />
+      <div className="card">
+        <Nutrients v={v} />
       </div>
-      <label className="field">
-        <span>Posiłek</span>
-        <select className="input" value={m} onChange={(e) => setM(Number(e.target.value))}>
-          {MEALS.map((x, i) => <option key={i} value={i}>{x}</option>)}
-        </select>
-      </label>
+      <div className="grid2">
+        <label className="field">
+          <span>Posiłek</span>
+          <select className="input" value={m} onChange={(e) => setM(Number(e.target.value))}>
+            {MEALS.map((x, i) => <option key={i} value={i}>{x}</option>)}
+          </select>
+        </label>
+        <TimeField value={time} onChange={setTime} />
+      </div>
       <button className="btn primary lg block" disabled={!g} onClick={add}>Dodaj</button>
       <button className="btn ghost block" onClick={toggleFav}>
         <Icon name={fav ? 'star-fill' : 'star'} size={18} /> {fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}

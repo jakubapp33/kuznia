@@ -215,6 +215,14 @@ export function Session() {
             <div className="stat"><span className="v">{Math.round(elapsed / 60)}<small>min</small></span><span className="l">czas</span></div>
             <div className="stat"><span className="v">{doneSets}</span><span className="l">serii roboczych</span></div>
           </div>
+          <div className="field">
+            <span>Jak poszło?</span>
+            <div className="hstack" style={{ gap: 6 }}>
+              {['😫', '😕', '😐', '🙂', '🔥'].map((ic, i) => (
+                <button key={i} aria-label={`Ocena ${i + 1} z 5`} className={'chip' + (w.rating === i + 1 ? ' on' : '')} style={{ flex: 1, fontSize: 20, padding: 0 }} onClick={() => update((x) => { x.rating = x.rating === i + 1 ? undefined : i + 1 })}>{ic}</button>
+              ))}
+            </div>
+          </div>
           {w.exercises.some((e) => e.sets.some((s) => !s.done)) && (
             <div className="note warn small">Niezaznaczone serie (bez ✓) nie zostaną zapisane.</div>
           )}

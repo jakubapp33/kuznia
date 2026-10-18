@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "icons": "node tools/make-icons.mjs",
-    "deploy": "sh tools/deploy.sh"
+    "deploy": "sh tools/deploy.sh",
+    "products": "node tools/fetch-products.mjs"
   },
   "dependencies": {
     "@zxing/browser": "^0.2.1",

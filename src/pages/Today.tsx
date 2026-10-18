@@ -1,12 +1,15 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { DayCard } from '../components/DayCard'
 import { Icon } from '../components/Icon'
 import { MacroBars, NumInput, PageHead, Ring } from '../components/ui'
 import { db } from '../db/db'
 import { addDays, isoDate, num, plural, weekStart } from '../lib/format'
 import { useActiveWorkout, useExercises, useProfile, useSetting, useTargets } from '../lib/hooks'
 import { nextDay, startWorkout } from '../lib/workout'
+import { analyze } from '../lib/insights'
+import { analyzeWeight } from '../lib/weight'
 
 function greeting() {
   const h = new Date().getHours()
@@ -26,8 +29,13 @@ export function Today() {
   const plan = useLiveQuery(() => (activePlanId ? db.plans.get(activePlanId) : undefined), [activePlanId])
   const workouts = useLiveQuery(() => db.workouts.orderBy('startedAt').reverse().limit(200).toArray(), [], [])
   const food = useLiveQuery(() => db.foodLog.where('date').equals(today).toArray(), [today], [])
-  const body = useLiveQuery(() => db.body.orderBy('date').reverse().limit(14).toArray(), [], [])
+  const body = useLiveQuery(() => db.body.orderBy('date').reverse().limit(60).toArray(), [], [])
   const { map } = useExercises()
+  const insight = useLiveQuery(async () => {
+    const [ws, food, days] = await Promise.all([db.workouts.toArray(), db.foodLog.toArray(), db.days.toArray()])
+    return analyze(ws, food, days, map).insights[0] ?? null
+  }, [map])
+  const trend = analyzeWeight([...body].reverse(), today, profile ?? undefined)
   const [weight, setWeight] = useState<number | undefined>()
 
   const eaten = food.reduce((a, f) => ({ kcal: a.kcal + f.kcal, p: a.p + f.p, f: a.f + f.f, c: a.c + f.c }), { kcal: 0, p: 0, f: 0, c: 0 })
@@ -155,15 +163,30 @@ export function Today() {
           </div>
           <div className="stat">
             <span className="v">{avg7 ? num(avg7) : '–'}<small>kg</small></span>
-            <span className="l">średnia z ost. pomiarów</span>
+            <span className="l">średnia z 7 ost. pomiarów</span>
           </div>
         </div>
         <div className="hstack">
           <NumInput value={weight} onChange={setWeight} placeholder={todayWeight ? 'Popraw dzisiejszą wagę' : 'Waga rano, na czczo (kg)'} />
           <button className="btn primary" disabled={!weight} onClick={saveWeight}>Zapisz</button>
         </div>
-        <div className="tiny muted">Waga waha się z dnia na dzień o 0,5–1,5 kg (woda, sól, jelita). Patrz na średnią, nie na pojedynczy pomiar.</div>
+        {trend ? (
+          <Link to="/postep" className={'note small ' + (trend.verdict.tone === 'good' ? 'good' : trend.verdict.tone === 'warn' ? 'warn' : '')}>
+            <b>{trend.verdict.title}.</b> {trend.verdict.text}
+          </Link>
+        ) : (
+          <div className="tiny muted">Waga waha się z dnia na dzień o 0,5–1,5 kg (woda, sól, jelita). Patrz na średnią, nie na pojedynczy pomiar.</div>
+        )}
       </div>
+
+      {insight && (
+        <Link to="/postep?tab=insights" className="card stack" style={{ gap: 6 }}>
+          <div className="hstack"><Icon name="bulb" /><h3 style={{ flex: 1 }}>Wniosek z Twoich danych</h3><Icon name="chev" className="chev" size={18} /></div>
+          <div className="small">{insight.text}</div>
+        </Link>
+      )}
+
+      <DayCard date={today} />
     </div>
   )
 }

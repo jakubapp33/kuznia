@@ -165,3 +165,14 @@ export function MacroBars({ eaten, target }: { eaten: { p: number; f: number; c:
     </div>
   )
 }
+
+export function MacroTiles({ kcal, p, c, f }: { kcal: number; p: number; c: number; f: number }) {
+  return (
+    <div className="card grid3" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
+      <div className="stat"><span className="v" style={{ fontSize: 20 }}>{Math.round(kcal)}</span><span className="l">kcal</span></div>
+      <div className="stat"><span className="v" style={{ fontSize: 20, color: 'var(--prot)' }}>{num(p)}</span><span className="l">białko g</span></div>
+      <div className="stat"><span className="v" style={{ fontSize: 20, color: 'var(--carb)' }}>{num(c)}</span><span className="l">węgle g</span></div>
+      <div className="stat"><span className="v" style={{ fontSize: 20, color: 'var(--fat)' }}>{num(f)}</span><span className="l">tłuszcz g</span></div>
+    </div>
+  )
+}

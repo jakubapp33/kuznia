@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
 import { RouterProvider } from 'react-router'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { TEMPLATES } from './data/plans'
@@ -11,6 +12,12 @@ import { startWorkout } from './lib/workout'
 let router: typeof import('./App').router
 
 beforeAll(async () => {
+  // baza produktów z dysku zamiast sieci
+  const products = readFileSync(process.cwd() + '/public/data/products.json', 'utf8')
+  globalThis.fetch = (async (url: string | URL) => {
+    if (String(url).includes('data/products.json')) return new Response(products, { status: 200 })
+    return new Response('{}', { status: 404 })
+  }) as typeof fetch
   // zapis danych przykładowych
   await setSetting('profile', { sex: 'm', age: 18, height: 178, weight: 72, activity: 1.55, goal: 'bulk', rate: 1, experience: 'początkujący' })
   const t = TEMPLATES[1]
@@ -25,7 +32,8 @@ beforeAll(async () => {
     })
     await db.body.add({ date: addDays(isoDate(), -14 + i * 2), weight: 72 + i * 0.1, waist: 80 })
   }
-  await db.foodLog.add({ date: isoDate(), meal: 0, name: 'Owsianka', grams: 80, kcal: 300, p: 10, f: 6, c: 50 })
+  await db.foodLog.add({ date: isoDate(), time: '08:00', meal: 0, name: 'Owsianka', grams: 80, kcal: 300, p: 10, f: 6, c: 50, fiber: 8, sugar: 1, satFat: 1, salt: 0, micro: { mg: 112, fe: 3.4 } })
+  await db.days.put({ date: isoDate(), sleepH: 7, water: 750, energy: 4 })
   await startWorkout((await db.plans.get(planId))!, t.days[1])
   router = (await import('./App')).router
 })
@@ -35,7 +43,7 @@ afterEach(cleanup)
 const ROUTES = [
   '/', '/trening', '/trening/plan/1', '/trening/szablon/ppl-6', '/trening/sesja', '/trening/historia', '/trening/historia/1',
   '/cwiczenia', '/cwiczenia/bench-press', '/cwiczenia/plank', '/cwiczenia/nowe', '/dieta', '/dieta/dodaj?meal=2', '/dieta/produkt', '/dieta/cele',
-  '/postep', '/ustawienia',
+  '/postep', '/postep?tab=insights', '/ustawienia',
 ]
 
 describe('każdy ekran renderuje się bez błędów', () => {
@@ -89,5 +97,45 @@ describe('treść i interakcje', () => {
   it('kalkulator: pokazuje wynik kcal', async () => {
     const { container } = await show('/dieta/cele')
     expect(container.textContent).toMatch(/\d{4}kcal dziennie/)
+  })
+})
+
+describe('nowe funkcje', () => {
+  async function show(path: string) {
+    await act(async () => { await router.navigate(path) })
+    const r = render(<RouterProvider router={router} />)
+    await act(async () => { await new Promise((res) => setTimeout(res, 400)) })
+    return r
+  }
+  it('wyszukiwanie w dużej bazie i filtr sklepu Lidl', async () => {
+    const { container, getByPlaceholderText, getByText } = await show('/dieta/dodaj?meal=0')
+    fireEvent.change(getByPlaceholderText(/skyr/), { target: { value: 'kefir' } })
+    await act(async () => { await new Promise((res) => setTimeout(res, 500)) })
+    expect(container.textContent).toContain('Produkty ze sklepów')
+    await act(async () => { getByText('Lidl').click() })
+    await act(async () => { await new Promise((res) => setTimeout(res, 500)) })
+    expect(container.textContent).toMatch(/Pilos|Milbona/)
+  })
+  it('karta produktu pokazuje mikroskładniki i godzinę', async () => {
+    const { container, getByPlaceholderText, findAllByText } = await show('/dieta/dodaj?meal=0')
+    fireEvent.change(getByPlaceholderText(/skyr/), { target: { value: 'szpinak' } })
+    await act(async () => { await new Promise((res) => setTimeout(res, 300)) })
+    ;(await findAllByText('Szpinak'))[0].click()
+    await act(async () => { await new Promise((res) => setTimeout(res, 300)) })
+    expect(container.ownerDocument.body.textContent).toContain('Witamina C')
+    expect(container.ownerDocument.body.textContent).toContain('Godzina posiłku')
+  })
+  it('dziennik diety: dzienniczek i szczegóły dnia', async () => {
+    const { container, getByText } = await show('/dieta')
+    expect(container.textContent).toContain('Dzienniczek')
+    expect(container.textContent).toContain('08:00')
+    await act(async () => { getByText(/witaminy, minerały/).click() })
+    expect(container.textContent).toContain('Magnez')
+  })
+  it('woda: dodanie szklanki zapisuje się', async () => {
+    const { getAllByText } = await show('/')
+    await act(async () => { getAllByText('+ szklanka 250 ml')[0].click() })
+    await act(async () => { await new Promise((res) => setTimeout(res, 200)) })
+    expect((await db.days.get(isoDate()))?.water).toBe(1000)
   })
 })

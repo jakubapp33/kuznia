@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
-import type { BodyEntry, Exercise, Food, FoodLogEntry, Plan, Workout } from '../types'
+import type { BodyEntry, DayLog, Exercise, Food, FoodLogEntry, Plan, Workout } from '../types'
 
 export interface SettingRow {
   key: string
@@ -14,6 +14,7 @@ export const db = new Dexie('kuznia') as Dexie & {
   foodLog: EntityTable<FoodLogEntry, 'id'>
   customExercises: EntityTable<Exercise, 'id'>
   settings: EntityTable<SettingRow, 'key'>
+  days: EntityTable<DayLog, 'date'>
 }
 
 db.version(1).stores({
@@ -26,6 +27,10 @@ db.version(1).stores({
   settings: 'key',
 })
 
+db.version(2).stores({
+  days: 'date',
+})
+
 export async function getSetting<T>(key: string): Promise<T | undefined> {
   return (await db.settings.get(key))?.value as T | undefined
 }
@@ -34,7 +39,7 @@ export async function setSetting(key: string, value: unknown) {
   await db.settings.put({ key, value })
 }
 
-export const TABLES = ['plans', 'workouts', 'body', 'foods', 'foodLog', 'customExercises', 'settings'] as const
+export const TABLES = ['plans', 'workouts', 'body', 'foods', 'foodLog', 'customExercises', 'settings', 'days'] as const
 
 /** kopia zapasowa całej bazy do obiektu JSON */
 export async function exportAll() {
@@ -49,7 +54,12 @@ export async function importAll(json: unknown) {
   await db.transaction('rw', TABLES.map((t) => db.table(t)), async () => {
     for (const t of TABLES) {
       await db.table(t).clear()
-      if (Array.isArray(j.data![t])) await db.table(t).bulkAdd(j.data![t])
+      if (Array.isArray(j.data![t])) await db.table(t).bulkPut(j.data![t])
     }
   })
+}
+
+export async function updateDay(date: string, patch: Partial<DayLog>) {
+  const cur = await db.days.get(date)
+  await db.days.put({ ...(cur ?? { date }), ...patch, date })
 }

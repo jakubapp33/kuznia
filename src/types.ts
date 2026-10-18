@@ -94,6 +94,8 @@ export interface Workout {
   dayId?: string
   exercises: WorkoutExercise[]
   note?: string
+  /** subiektywna ocena treningu 1–5 */
+  rating?: number
 }
 
 export interface BodyEntry {
@@ -108,6 +110,9 @@ export interface BodyEntry {
   bodyFat?: number
 }
 
+/** mikroskładniki na 100 g (lub w porcji – we wpisach dziennika); klucze jak w MICRO_INFO */
+export type Micro = Record<string, number>
+
 export interface Food {
   /** 'pl:…' baza lokalna, 'off:<kod>' Open Food Facts, 'my:…' własny */
   id: string
@@ -119,6 +124,10 @@ export interface Food {
   f: number
   c: number
   fiber?: number
+  sugar?: number
+  satFat?: number
+  salt?: number
+  micro?: Micro
   /** typowa porcja w gramach */
   portion?: number
   portionName?: string
@@ -130,6 +139,8 @@ export interface Food {
 export interface FoodLogEntry {
   id?: number
   date: string
+  /** godzina posiłku HH:MM */
+  time?: string
   meal: number
   foodId?: string
   name: string
@@ -138,6 +149,21 @@ export interface FoodLogEntry {
   p: number
   f: number
   c: number
+  fiber?: number
+  sugar?: number
+  satFat?: number
+  salt?: number
+  micro?: Micro
+}
+
+/** dzienniczek dnia: sen (z nocy poprzedzającej ten dzień), woda, samopoczucie, notatka */
+export interface DayLog {
+  date: string
+  sleepH?: number
+  sleepQ?: number
+  water?: number
+  energy?: number
+  note?: string
 }
 
 export type Sex = 'm' | 'f'
