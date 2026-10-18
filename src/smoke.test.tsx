@@ -1,0 +1,93 @@
+// @vitest-environment jsdom
+import 'fake-indexeddb/auto'
+import { act, cleanup, render } from '@testing-library/react'
+import { RouterProvider } from 'react-router'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { TEMPLATES } from './data/plans'
+import { db, setSetting } from './db/db'
+import { isoDate, addDays } from './lib/format'
+import { startWorkout } from './lib/workout'
+
+let router: typeof import('./App').router
+
+beforeAll(async () => {
+  // zapis danych przykładowych
+  await setSetting('profile', { sex: 'm', age: 18, height: 178, weight: 72, activity: 1.55, goal: 'bulk', rate: 1, experience: 'początkujący' })
+  const t = TEMPLATES[1]
+  const planId = (await db.plans.add({ name: t.name, days: structuredClone(t.days), createdAt: Date.now() })) as number
+  await setSetting('activePlanId', planId)
+  for (let i = 0; i < 6; i++) {
+    const day = t.days[i % t.days.length]
+    await db.workouts.add({
+      name: day.name, date: addDays(isoDate(), -14 + i * 2), startedAt: Date.now() - (14 - i * 2) * 864e5, finishedAt: Date.now() - (14 - i * 2) * 864e5 + 3600e3,
+      planId, dayId: day.id,
+      exercises: day.exercises.map((pe) => ({ exerciseId: pe.exerciseId, restSec: pe.restSec, repMin: pe.repMin, repMax: pe.repMax, sets: Array.from({ length: pe.sets }, () => ({ w: 40 + i * 2.5, r: 8 + (i % 3), done: true })) })),
+    })
+    await db.body.add({ date: addDays(isoDate(), -14 + i * 2), weight: 72 + i * 0.1, waist: 80 })
+  }
+  await db.foodLog.add({ date: isoDate(), meal: 0, name: 'Owsianka', grams: 80, kcal: 300, p: 10, f: 6, c: 50 })
+  await startWorkout((await db.plans.get(planId))!, t.days[1])
+  router = (await import('./App')).router
+})
+
+afterEach(cleanup)
+
+const ROUTES = [
+  '/', '/trening', '/trening/plan/1', '/trening/szablon/ppl-6', '/trening/sesja', '/trening/historia', '/trening/historia/1',
+  '/cwiczenia', '/cwiczenia/bench-press', '/cwiczenia/plank', '/cwiczenia/nowe', '/dieta', '/dieta/dodaj?meal=2', '/dieta/produkt', '/dieta/cele',
+  '/postep', '/ustawienia',
+]
+
+describe('każdy ekran renderuje się bez błędów', () => {
+  for (const path of ROUTES) {
+    it(path, async () => {
+      const errors: unknown[] = []
+      const orig = console.error
+      console.error = (...a: unknown[]) => { errors.push(a); }
+      window.location.hash = '#' + path
+      await act(async () => { await router.navigate(path) })
+      const { container } = render(<RouterProvider router={router} />)
+      await act(async () => { await new Promise((r) => setTimeout(r, 300)) })
+      console.error = orig
+      const text = container.textContent ?? ''
+      expect(text).not.toMatch(/Unexpected Application Error|Error/)
+      expect(text.length).toBeGreaterThan(50)
+      const real = errors.filter((e) => !String((e as unknown[])[0]).includes('not wrapped in act'))
+      expect(real.map((e) => String((e as unknown[])[0]).slice(0, 300))).toEqual([])
+    })
+  }
+})
+
+describe('treść i interakcje', () => {
+  async function show(path: string) {
+    await act(async () => { await router.navigate(path) })
+    const r = render(<RouterProvider router={router} />)
+    await act(async () => { await new Promise((res) => setTimeout(res, 300)) })
+    return r
+  }
+  it('Dziś pokazuje trening w toku i makro', async () => {
+    const { container } = await show('/')
+    expect(container.textContent).toContain('Trening w toku')
+    expect(container.textContent).toContain('kcal')
+  })
+  it('sesja: zaliczenie serii zapisuje ją w bazie i uzupełnia ciężar', async () => {
+    const { container, getAllByLabelText } = await show('/trening/sesja')
+    expect(container.textContent).toContain('Przysiad ze sztangą')
+    expect(container.textContent).toMatch(/zwiększ|Zostań|Pierwsza sesja|dołóż/i)
+    await act(async () => { getAllByLabelText('Zalicz serię')[0].click() })
+    await act(async () => { await new Promise((res) => setTimeout(res, 400)) })
+    const w = await db.workouts.filter((x) => !x.finishedAt).first()
+    const s = w!.exercises[0].sets[0]
+    expect(s.done).toBe(true)
+    expect(s.r).toBeGreaterThan(0)
+    expect(container.textContent).toContain('Przerwa')
+  })
+  it('postęp: objętość tygodniowa i wykres siły', async () => {
+    const { container } = await show('/postep')
+    expect(container.textContent).toContain('Serie na partię')
+  })
+  it('kalkulator: pokazuje wynik kcal', async () => {
+    const { container } = await show('/dieta/cele')
+    expect(container.textContent).toMatch(/\d{4}kcal dziennie/)
+  })
+})
