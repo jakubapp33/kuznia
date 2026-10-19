@@ -164,6 +164,11 @@ export interface DayLog {
   water?: number
   energy?: number
   note?: string
+  /** aktywność – wpisywana ręcznie, np. z zegarka */
+  steps?: number
+  kcalRest?: number
+  kcalActive?: number
+  activity?: string
 }
 
 export type Sex = 'm' | 'f'

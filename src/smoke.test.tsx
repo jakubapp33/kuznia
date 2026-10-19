@@ -138,4 +138,13 @@ describe('nowe funkcje', () => {
     await act(async () => { await new Promise((res) => setTimeout(res, 200)) })
     expect((await db.days.get(isoDate()))?.water).toBe(1000)
   })
+  it('aktywność: kroki i spalone kcal pokazują bilans dnia', async () => {
+    await db.days.update(isoDate(), { kcalRest: 1700, kcalActive: 500 })
+    const { container, getByText } = await show('/dieta')
+    expect(container.textContent).toContain('2200 kcal spalone')
+    expect(container.textContent).toContain('Bilans dnia')
+    await act(async () => { getByText('Bieganie').click() })
+    await act(async () => { await new Promise((res) => setTimeout(res, 200)) })
+    expect((await db.days.get(isoDate()))?.activity).toBe('Bieganie')
+  })
 })

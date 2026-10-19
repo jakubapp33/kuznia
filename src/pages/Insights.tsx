@@ -28,6 +28,7 @@ export function InsightsTab() {
   const days14 = data.days.filter((d) => d.date > from && d.date <= today)
   const sleep = days14.filter((d) => d.sleepH).map((d) => d.sleepH!)
   const water = days14.filter((d) => d.water).map((d) => d.water!)
+  const steps = days14.filter((d) => d.steps).map((d) => d.steps!)
   const byDay = new Map<string, { kcal: number; p: number }>()
   for (const f of data.food) {
     if (f.date <= from || f.date > today) continue
@@ -45,7 +46,7 @@ export function InsightsTab() {
         <div className="card stack">
           <div className="hstack"><Icon name="bulb" /><h3>Zbieram dane do wniosków</h3></div>
           <div className="small muted">
-            Porównuję każdy trening z Twoją normą z poprzednich sesji tych samych ćwiczeń i szukam, co sprzyja lepszym wynikom. Potrzebuję min. {MIN_WORKOUTS} takich treningów
+            Porównuję każdy trening z Twoją normą z poprzednich sesji tych samych ćwiczeń i szukam, co (sen, jedzenie, kroki, pora dnia…) sprzyja lepszym wynikom. Potrzebuję min. {MIN_WORKOUTS} takich treningów
             (ćwiczenie musi być wcześniej zrobione co najmniej 2 razy).
           </div>
           <div className="bar"><i style={{ width: `${(res.scored / MIN_WORKOUTS) * 100}%` }} /></div>
@@ -113,6 +114,9 @@ export function InsightsTab() {
           <span className="v">{avg(foodDays.map((d) => d.kcal)) !== undefined ? Math.round(avg(foodDays.map((d) => d.kcal))!) : '–'}<small>kcal</small></span>
           <span className="l">średnio dziennie{targets ? ` (cel ${targets.kcal})` : ''}</span>
         </div>
+        {steps.length > 0 && (
+          <div className="stat"><span className="v">{Math.round(avg(steps)!).toLocaleString('pl-PL')}</span><span className="l">średnio kroków ({steps.length} dni)</span></div>
+        )}
         {proteinHit !== undefined && foodDays.length > 0 && (
           <div className="stat"><span className="v">{proteinHit}/{foodDays.length}</span><span className="l">dni z celem białka</span></div>
         )}

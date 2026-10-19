@@ -10,6 +10,7 @@ import { useActiveWorkout, useExercises, useProfile, useSetting, useTargets } fr
 import { nextDay, startWorkout } from '../lib/workout'
 import { analyze } from '../lib/insights'
 import { analyzeWeight } from '../lib/weight'
+import { EnergyCard } from '../components/EnergyCard'
 
 function greeting() {
   const h = new Date().getHours()
@@ -185,6 +186,8 @@ export function Today() {
           <div className="small">{insight.text}</div>
         </Link>
       )}
+
+      <EnergyCard compact />
 
       <DayCard date={today} />
     </div>

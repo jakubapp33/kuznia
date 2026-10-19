@@ -4,6 +4,7 @@ import type { BodyEntry, DayLog, FoodLogEntry, Profile, Workout } from '../types
 import { addDays } from './format'
 import { analyze, workoutFactors } from './insights'
 import { analyzeWeight, weeklyAverages } from './weight'
+import { analyzeEnergy } from './energy'
 
 const START = '2026-09-01'
 
@@ -87,5 +88,29 @@ describe('waga', () => {
     const w = weeklyAverages(series(-0.4), today, 4)
     expect(w).toHaveLength(4)
     expect(w[3].avg!).toBeLessThan(w[0].avg!)
+  })
+})
+
+describe('bilans energii', () => {
+  const profile: Profile = { sex: 'm', age: 20, height: 180, weight: 80, activity: 1.55, goal: 'cut', rate: 0.5, experience: 'początkujący' }
+  const today = '2026-10-18'
+  const days: DayLog[] = Array.from({ length: 14 }, (_, i) => ({ date: addDays(today, -14 + i), kcalRest: 1800, kcalActive: 600, steps: 10000 }))
+  const food: FoodLogEntry[] = days.map((d) => ({ date: d.date, meal: 0, name: 'x', kcal: 2000, p: 150, f: 60, c: 200 }))
+  const body = (perWeek: number): BodyEntry[] => Array.from({ length: 28 }, (_, i) => ({ date: addDays(today, -27 + i), weight: 80 + (perWeek / 7) * i }))
+
+  it('średni deficyt 400 kcal zgodny z wagą', () => {
+    const a = analyzeEnergy(food, days, body(-0.36), today, profile)
+    expect(a.avgBalance).toBeCloseTo(-400)
+    expect(a.avgSteps).toBe(10000)
+    expect(a.verdict!.title).toContain('deficyt ok. 400')
+    expect(a.verdict!.text).toContain('tendencję spadkową')
+    expect(a.verdict!.tone).toBe('good')
+  })
+  it('zegarek mówi deficyt, a waga stoi = ostrzeżenie', () => {
+    expect(analyzeEnergy(food, days, body(0), today, profile).verdict!.tone).toBe('warn')
+  })
+  it('bez danych z zegarka – bilans z samej wagi', () => {
+    const a = analyzeEnergy([], [], body(0.3), today, profile)
+    expect(a.verdict!.text).toContain('nadwyżka')
   })
 })

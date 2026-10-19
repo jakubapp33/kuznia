@@ -48,6 +48,7 @@ export interface Factors {
   hour: number
   restDays?: number
   prevDayKcal?: number
+  prevSteps?: number
 }
 
 function minutes(t: string) {
@@ -79,6 +80,8 @@ export function workoutFactors(w: Workout, food: FoodLogEntry[], days: Map<strin
   if (prev) f.restDays = Math.min(7, daysBetween(prev.date, w.date))
   const y = food.filter((x) => x.date === addDays(w.date, -1)).reduce((s, x) => s + x.kcal, 0)
   if (y >= 800) f.prevDayKcal = y
+  const pd = days.get(addDays(w.date, -1))
+  if (pd?.steps) f.prevSteps = pd.steps
   return f
 }
 
@@ -129,6 +132,7 @@ const RULES: Rule[] = [
   { id: 'rest', get: (f) => f.restDays, thresholds: [2, 3], hi: (t) => `po co najmniej ${t} dniach przerwy od poprzedniego treningu`, lo: (t) => `gdy trenujesz po krótszej przerwie niż ${t} dni` },
   { id: 'water', get: (f) => f.water, thresholds: [1500, 2000, 2500], hi: (t) => `w dni, gdy wypijesz co najmniej ${num(t / 1000)} l wody`, lo: (t) => `w dni, gdy wypijesz mniej niż ${num(t / 1000)} l wody` },
   { id: 'energy', get: (f) => f.energy, thresholds: [4], hi: () => 'gdy oceniasz energię na 4–5', lo: () => 'gdy oceniasz energię na 1–3' },
+  { id: 'steps', get: (f) => f.prevSteps, thresholds: [8000, 12000, 15000], hi: (t) => `gdy dzień wcześniej zrobisz co najmniej ${t.toLocaleString('pl-PL')} kroków`, lo: (t) => `gdy dzień wcześniej zrobisz mniej niż ${t.toLocaleString('pl-PL')} kroków` },
   { id: 'kcal', get: (f) => f.prevDayKcal, thresholds: [], hi: (t) => `gdy dzień wcześniej zjesz co najmniej ${Math.round(t)} kcal`, lo: (t) => `gdy dzień wcześniej zjesz mniej niż ${Math.round(t)} kcal` },
 ]
 

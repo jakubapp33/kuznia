@@ -13,6 +13,7 @@ import { e1rm, exerciseHistory, records, workingSets } from '../lib/progression'
 import { volumeStatus, weeklySets } from '../lib/stats'
 import { useProfile } from '../lib/hooks'
 import { analyzeWeight, weeklyAverages } from '../lib/weight'
+import { EnergyCard } from '../components/EnergyCard'
 import { InsightsTab } from './Insights'
 import type { BodyEntry, MuscleId } from '../types'
 
@@ -245,6 +246,7 @@ function BodyTab() {
           ) : (
             <div className="note small">Waż się min. 3–4 razy w tygodniu przez 2 tygodnie, a ocenię tempo zmian i postęp względem celu.</div>
           )}
+          <EnergyCard />
           {withAvg.length > 0 && (
             <div className="card stack" style={{ gap: 8 }}>
               <h3>Średnie tygodniowe</h3>
