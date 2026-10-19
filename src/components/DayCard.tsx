@@ -1,11 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useState } from 'react'
 import { db, updateDay } from '../db/db'
+import { Link } from 'react-router'
 import { burnedOf } from '../lib/energy'
+import { parseHealthText } from '../lib/healthPaste'
 import { isoDate, num } from '../lib/format'
 import { useProfile } from '../lib/hooks'
 import { Icon } from './Icon'
-import { NumInput } from './ui'
+import { NumInput, Sheet } from './ui'
 
 const QUALITY = ['😫', '😕', '😐', '🙂', '😴']
 const ENERGY = ['🪫', '😮‍💨', '😐', '💪', '⚡️']
@@ -36,6 +38,27 @@ export function DayCard({ date }: { date: string }) {
   const eaten = useLiveQuery(async () => (await db.foodLog.where('date').equals(date).toArray()).reduce((s, f) => s + f.kcal, 0), [date], 0)
   const [note, setNote] = useState('')
   const [activity, setActivity] = useState('')
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [pasted, setPasted] = useState('')
+  const [msg, setMsg] = useState('')
+  async function applyHealth(text: string) {
+    const v = parseHealthText(text)
+    if (!v) return false
+    await updateDay(date, v)
+    setMsg(`Wklejono: ${[v.steps !== undefined && `${v.steps.toLocaleString('pl-PL')} kroków`, v.kcalActive !== undefined && `${v.kcalActive} kcal aktywnych`, v.kcalRest !== undefined && `${v.kcalRest} kcal spocz.`].filter(Boolean).join(', ')}`)
+    return true
+  }
+  async function pasteGarmin() {
+    setMsg('')
+    try {
+      const text = await navigator.clipboard.readText()
+      if (await applyHealth(text)) return
+    } catch {
+      // brak zgody lub brak API – ręczne wklejenie
+    }
+    setPasted('')
+    setPasteOpen(true)
+  }
   useEffect(() => setNote(day?.note ?? ''), [day?.note, date])
   useEffect(() => setActivity(day?.activity ?? ''), [day?.activity, date])
   const burned = burnedOf(day, profile ?? undefined)
@@ -103,8 +126,22 @@ export function DayCard({ date }: { date: string }) {
             Bilans dnia{date === isoDate() ? ' (na razie)' : ''}: zjedzone {Math.round(eaten)} − spalone {Math.round(burned!.kcal)} = <b className="num">{balance > 0 ? '+' : '−'}{Math.abs(Math.round(balance))} kcal</b> ({Math.abs(balance) < 100 ? 'na zero' : balance < 0 ? 'deficyt' : 'nadwyżka'})
           </div>
         )}
-        <div className="tiny muted">Przepisz z Garmin Connect: Kroki, Kalorie → Spoczynkowe i Aktywne. Najlepiej wieczorem lub następnego dnia za cały dzień.</div>
+        <div className="hstack">
+          <button className="btn sm" style={{ flex: 1 }} onClick={pasteGarmin}><Icon name="download" size={16} /> Wklej z Garmina</button>
+          <Link to="/garmin" className="btn ghost sm">Jak ustawić?</Link>
+        </div>
+        {msg && <div className="note good small">{msg}</div>}
+        <div className="tiny muted">Możesz też przepisać z Garmin Connect: Kroki oraz Kalorie → Spoczynkowe i Aktywne.</div>
       </div>
+      {pasteOpen && (
+        <Sheet title="Wklej dane ze Skrótu" onClose={() => setPasteOpen(false)}>
+          <div className="small muted">Przytrzymaj pole i wybierz „Wklej”. Najpierw uruchom skrót „Kuźnia”.</div>
+          <textarea className="input" style={{ minHeight: 90 }} value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder={'kroki=8532\naktywne=534\nspoczynkowe=1745'} aria-label="Dane ze Skrótu" />
+          {pasted && !parseHealthText(pasted) && <div className="note warn small">Nie rozpoznaję danych. Tekst powinien wyglądać jak „kroki=8532”. Sprawdź instrukcję.</div>}
+          <button className="btn primary lg block" disabled={!parseHealthText(pasted)} onClick={async () => { if (await applyHealth(pasted)) setPasteOpen(false) }}>Zapisz</button>
+          <Link to="/garmin" className="btn ghost block">Jak ustawić skrót?</Link>
+        </Sheet>
+      )}
 
       <div className="hstack small"><Icon name="bolt" size={18} /><b style={{ flex: 1 }}>Energia / samopoczucie</b></div>
       <Scale value={day?.energy} icons={ENERGY} label="Samopoczucie" onChange={(v) => updateDay(date, { energy: v })} />

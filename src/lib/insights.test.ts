@@ -5,6 +5,7 @@ import { addDays } from './format'
 import { analyze, workoutFactors } from './insights'
 import { analyzeWeight, weeklyAverages } from './weight'
 import { analyzeEnergy } from './energy'
+import { parseHealthText, parseLooseNumber } from './healthPaste'
 
 const START = '2026-09-01'
 
@@ -112,5 +113,22 @@ describe('bilans energii', () => {
   it('bez danych z zegarka – bilans z samej wagi', () => {
     const a = analyzeEnergy([], [], body(0.3), today, profile)
     expect(a.verdict!.text).toContain('nadwyżka')
+  })
+})
+
+describe('wklejanie ze Skrótu', () => {
+  it('liczby w różnych formatach', () => {
+    expect(parseLooseNumber('8\u00a0532')).toBe(8532)
+    expect(parseLooseNumber('1 734,5 kcal')).toBe(1734.5)
+    expect(parseLooseNumber('1,734.5')).toBe(1734.5)
+    expect(parseLooseNumber('12,345')).toBe(12345)
+    expect(parseLooseNumber('534,2')).toBe(534.2)
+    expect(parseLooseNumber('')).toBeUndefined()
+  })
+  it('tekst ze skrótu', () => {
+    expect(parseHealthText('kroki=8 532\naktywne=534,6\nspoczynkowe=1 745')).toEqual({ steps: 8532, kcalActive: 535, kcalRest: 1745 })
+    expect(parseHealthText('Kroki: 10000; Aktywne: 400')).toEqual({ steps: 10000, kcalActive: 400 })
+    expect(parseHealthText('kroki=')).toBeUndefined()
+    expect(parseHealthText('jakiś tekst')).toBeUndefined()
   })
 })

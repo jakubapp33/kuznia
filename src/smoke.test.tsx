@@ -43,7 +43,7 @@ afterEach(cleanup)
 const ROUTES = [
   '/', '/trening', '/trening/plan/1', '/trening/szablon/ppl-6', '/trening/sesja', '/trening/historia', '/trening/historia/1',
   '/cwiczenia', '/cwiczenia/bench-press', '/cwiczenia/plank', '/cwiczenia/nowe', '/dieta', '/dieta/dodaj?meal=2', '/dieta/produkt', '/dieta/cele',
-  '/postep', '/postep?tab=insights', '/ustawienia',
+  '/postep', '/postep?tab=insights', '/ustawienia', '/garmin',
 ]
 
 describe('każdy ekran renderuje się bez błędów', () => {
@@ -146,5 +146,16 @@ describe('nowe funkcje', () => {
     await act(async () => { getByText('Bieganie').click() })
     await act(async () => { await new Promise((res) => setTimeout(res, 200)) })
     expect((await db.days.get(isoDate()))?.activity).toBe('Bieganie')
+  })
+  it('wklej z Garmina: bez schowka otwiera pole do wklejenia', async () => {
+    const { getAllByText, getByLabelText, getByText } = await show('/')
+    await act(async () => { getAllByText('Wklej z Garmina')[0].click() })
+    const ta = getByLabelText('Dane ze Skrótu') as HTMLTextAreaElement
+    await act(async () => { fireEvent.change(ta, { target: { value: 'kroki=9 120\naktywne=610\nspoczynkowe=1 760' } }) })
+    await act(async () => { (ta.closest('.sheet, [role=dialog]') ?? document.body).querySelector<HTMLButtonElement>('.btn.primary.lg')!.click() })
+    await act(async () => { await new Promise((res) => setTimeout(res, 200)) })
+    expect(getByText(/Wklejono: 9/)).toBeTruthy()
+    const d = await db.days.get(isoDate())
+    expect([d?.steps, d?.kcalActive, d?.kcalRest]).toEqual([9120, 610, 1760])
   })
 })

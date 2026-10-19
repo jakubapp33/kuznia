@@ -16,6 +16,7 @@ import { FoodForm } from './pages/FoodForm'
 import { Targets } from './pages/Targets'
 import { Progress } from './pages/Progress'
 import { Settings } from './pages/Settings'
+import { GarminHelp } from './pages/GarminHelp'
 
 // HashRouter – działa na GitHub Pages bez konfiguracji serwera
 export const router = createHashRouter([
@@ -39,6 +40,7 @@ export const router = createHashRouter([
       { path: '/dieta/cele', element: <Targets /> },
       { path: '/postep', element: <Progress /> },
       { path: '/ustawienia', element: <Settings /> },
+      { path: '/garmin', element: <GarminHelp /> },
     ],
   },
 ])

@@ -101,6 +101,12 @@ export function Settings() {
         ))}
       </div>
 
+      <div className="section-title">Zegarek</div>
+      <Link to="/garmin" className="card row" style={{ display: 'flex' }}>
+        <div className="grow"><div className="title small">Dane z Garmina (kroki, kalorie)</div><div className="meta">Jak ustawić Skrót iOS</div></div>
+        <Icon name="chev" className="chev" size={18} />
+      </Link>
+
       <div className="section-title">Na ekran główny iPhone’a</div>
       <div className="card small">
         <ol className="steps">
