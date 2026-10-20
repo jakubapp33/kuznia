@@ -72,7 +72,7 @@ export function WorkoutDetail() {
                     ? `${num(s.t ?? 0)} min${s.d ? ` · ${num(s.d)} km` : ''}`
                     : ex?.load === 'time'
                       ? `${s.w ? num(s.w) + ' kg · ' : ''}${s.t ?? 0} s`
-                      : `${s.w ? num(s.w) + ' kg × ' : ''}${s.r ?? 0} powt.`}
+                      : `${s.w ? num(s.w) + ' kg × ' : ''}${s.r ?? 0} powt.${s.rir !== undefined ? ` · RIR ${s.rir}` : ''}`}
                 </span>
                 <span className="spacer" />
                 {s.w && s.r && !s.warmup ? <span className="tiny muted">≈1RM {num(e1rm(s.w, s.r))}</span> : null}

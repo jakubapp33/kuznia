@@ -5,7 +5,7 @@ import { Icon } from '../components/Icon'
 import { PageHead } from '../components/ui'
 import { MUSCLES } from '../data/muscles'
 import { useExercises } from '../lib/hooks'
-import { filterExercises } from '../lib/search'
+import { searchExercises } from '../lib/search'
 import type { Equipment } from '../types'
 
 const EQUIPMENT: Equipment[] = ['sztanga', 'hantle', 'maszyna', 'wyciąg', 'masa ciała', 'kettlebell', 'inne', 'cardio']
@@ -29,7 +29,7 @@ export function ExerciseList() {
   } catch {
     /* ignoruj */
   }
-  const list = filterExercises(all, q, group, eq)
+  const { list, similar } = searchExercises(all, q, group, eq)
   return (
     <div className="page">
       <PageHead
@@ -42,6 +42,7 @@ export function ExerciseList() {
         <option value="">Każdy sprzęt</option>
         {EQUIPMENT.map((x) => <option key={x} value={x}>{x[0].toUpperCase() + x.slice(1)}</option>)}
       </select>
+      {similar && <div className="note small">Nie mam ćwiczenia „{q}”. Może chodziło o któreś z tych?</div>}
       <div className="card flush list">
         {list.map((e) => (
           <Link key={e.id} to={`/cwiczenia/${e.id}`} className="row">
@@ -53,7 +54,7 @@ export function ExerciseList() {
             <Icon name="chev" className="chev" size={18} />
           </Link>
         ))}
-        {list.length === 0 && <div className="empty">Brak ćwiczeń dla tych filtrów.</div>}
+        {list.length === 0 && <div className="empty">Brak ćwiczeń dla tych filtrów. Spróbuj nazwy partii, np. „łydki”, „klata”, „plecy”, albo dodaj własne ćwiczenie (+).</div>}
       </div>
     </div>
   )

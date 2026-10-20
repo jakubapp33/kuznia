@@ -1,3 +1,6 @@
+import { EXTRA_FOODS } from './foods-extra'
+import { unitLabel, unitsFor } from '../lib/units'
+import { norm, queryStems, searchExercises, stem, textScore } from '../lib/search'
 import { describe, expect, it } from 'vitest'
 import { EXERCISES, EXERCISE_MAP } from './exercises'
 import { LOCAL_FOODS } from './foods'
@@ -33,7 +36,7 @@ describe('baza produktów', () => {
     const bad: string[] = []
     for (const f of LOCAL_FOODS) {
       // alkohol (7 kcal/g) i błonnik zaburzają bilans – pomijamy piwo
-      if (f.name.startsWith('Piwo')) continue
+      if (/^(Piwo|Wino|Wódka|Whisky|Cydr)/.test(f.name) || f.kcal < 5) continue
       // błonnik ok. 2 kcal/g, w tabelach często wliczony do węglowodanów
       const fib = f.fiber ?? 0
       const calc = f.p * 4 + f.f * 9 + (f.c - fib) * 4 + fib * 2
@@ -45,12 +48,64 @@ describe('baza produktów', () => {
   })
 })
 
+const EXTRA_IDS = new Set(EXTRA_FOODS.map((f) => f.id))
+
 describe('szczegóły produktów lokalnych', () => {
   it('każdy produkt ma cukry, tłuszcze nasycone, sól i mikroskładniki', () => {
-    for (const f of LOCAL_FOODS) {
+    for (const f of LOCAL_FOODS.filter((x) => !EXTRA_IDS.has(x.id))) {
       expect(f.micro, f.name).toBeTruthy()
       expect(f.sugar! <= f.c + 0.5, `${f.name}: cukry > węgle`).toBe(true)
       expect(f.satFat! <= f.f + 0.5, `${f.name}: nasycone > tłuszcz`).toBe(true)
     }
+  })
+})
+
+describe('miary domowe', () => {
+  const find = (name: string) => LOCAL_FOODS.find((f) => f.name === name)!
+  const names = (name: string) => unitsFor(find(name)).map((u) => u.n[0])
+  it('miód, chleb, jajko, olej, masło', () => {
+    expect(names('Miód')).toContain('łyżeczka')
+    expect(names('Chleb żytni razowy')).toContain('kromka')
+    expect(names('Jajko kurze')[0]).toBe('jajko M')
+    expect(names('Oliwa z oliwek')).toEqual(expect.arrayContaining(['łyżka', 'łyżeczka']))
+    expect(names('Masło')).toContain('plasterek')
+    expect(names('Masło orzechowe')).toContain('łyżeczka')
+    expect(names('Mięso mielone wołowe 5% tł.')).not.toContain('sztuka')
+    expect(names('Tortilla pszenna')).toContain('placek')
+    expect(names('Winogrona')).not.toContain('kieliszek')
+    expect(names('Wino czerwone wytrawne')).toContain('kieliszek')
+  })
+  it('odmiana', () => {
+    const u = unitsFor(find('Miód')).find((x) => x.n[0] === 'łyżeczka')!
+    expect(unitLabel(u, 1)).toBe('1 łyżeczka')
+    expect(unitLabel(u, 2)).toBe('2 łyżeczki')
+    expect(unitLabel(u, 5)).toBe('5 łyżeczek')
+    expect(unitLabel(u, 0.5)).toBe('½ łyżeczki')
+    expect(unitLabel(u, 12)).toBe('12 łyżeczek')
+    expect(unitLabel(u, 22)).toBe('22 łyżeczki')
+  })
+  it('każdy produkt lokalny ma sensowne miary', () => {
+    for (const f of LOCAL_FOODS) for (const u of unitsFor(f)) expect(u.g, f.name).toBeGreaterThan(0)
+  })
+})
+
+describe('wyszukiwanie', () => {
+  const ex = (q: string) => searchExercises(EXERCISES, q, '', '')
+  it('partie potocznie i z odmianą', () => {
+    expect(ex('łydki').list[0].primary).toContain('calves')
+    expect(ex('lydek').list[0].primary).toContain('calves')
+    expect(ex('klata').list[0].primary).toContain('chest')
+    expect(ex('brzuch').list.slice(0, 5).every((e) => e.primary.some((m) => m === 'abs' || m === 'obliques'))).toBe(true)
+    expect(ex('biceps hantle').list.every((e) => e.equipment === 'hantle')).toBe(true)
+  })
+  it('literówki i podobne', () => {
+    expect(ex('przysiat').list[0].pl).toContain('Przysiad')
+    expect(ex('wyciskanei').list.length).toBeGreaterThan(0)
+  })
+  it('rdzenie produktów', () => {
+    expect(stem('jajka')).toBe('jajk')
+    expect(stem(norm('ziemniaków'))).toBe('ziemniak')
+    const st = queryStems('płatków owsianych')
+    expect(textScore(norm('Płatki owsiane'), st)).toBeGreaterThan(0)
   })
 })

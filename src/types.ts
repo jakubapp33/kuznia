@@ -131,6 +131,8 @@ export interface Food {
   /** typowa porcja w gramach */
   portion?: number
   portionName?: string
+  /** miary domowe (gdy brak – dobierane po nazwie, patrz lib/units) */
+  units?: { n: [string, string, string]; g: number }[]
   barcode?: string
   lastUsed?: number
   fav?: 0 | 1
@@ -145,6 +147,8 @@ export interface FoodLogEntry {
   foodId?: string
   name: string
   grams?: number
+  /** jak wpisano ilość, np. „2 łyżeczki” */
+  amount?: string
   kcal: number
   p: number
   f: number

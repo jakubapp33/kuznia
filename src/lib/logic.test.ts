@@ -89,3 +89,19 @@ describe('statystyki', () => {
     expect(nextDay(plan, [w(1, [], 'a'), w(2, [], 'b')])?.id).toBe('a')
   })
 })
+
+describe('RIR w podpowiedziach', () => {
+  const ex = EXERCISE_MAP.get('bench-press')!
+  const we = (rir: number | undefined, r = 8) => ({ exerciseId: 'bench-press', restSec: 120, sets: [1, 2, 3].map(() => ({ w: 60, r, rir, done: true })) })
+  it('duży zapas = zwiększ ciężar mimo braku góry zakresu', () => {
+    const s = suggest(ex, 6, 10, [we(4)])
+    expect(s.kind).toBe('increase')
+    expect(s.weight).toBe(62.5)
+  })
+  it('każda seria do upadku = zostań', () => {
+    expect(suggest(ex, 6, 10, [we(0)]).kind).toBe('hold')
+  })
+  it('bez RIR – jak dotąd dokładamy powtórzenie', () => {
+    expect(suggest(ex, 6, 10, [we(undefined)]).kind).toBe('reps')
+  })
+})

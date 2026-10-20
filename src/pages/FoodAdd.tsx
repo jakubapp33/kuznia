@@ -11,7 +11,8 @@ import { MEAL_TIMES, nowTime, scaleFood } from '../lib/foodcalc'
 import { isoDate, num } from '../lib/format'
 import { lookupBarcode, searchOff } from '../lib/off'
 import { STORES, findBarcode, loadProducts, searchProducts } from '../lib/products'
-import { norm } from '../lib/search'
+import { norm, queryStems, textScore } from '../lib/search'
+import { fmtQty, unitLabel, unitsFor } from '../lib/units'
 import type { Food } from '../types'
 import { MEALS } from './Diet'
 
@@ -88,16 +89,18 @@ function SearchTab({ onPick }: { onPick: (f: Food) => void }) {
   }, [q, store, dbState])
 
   const mine = useMemo(() => {
-    const words = norm(q).split(/\s+/).filter(Boolean)
+    const words = queryStems(q)
     if (store) return []
     const savedIds = new Set(saved.map((f) => f.id))
     if (!words.length) {
       return saved.filter((f) => f.lastUsed || f.fav).sort((a, b) => (b.fav ?? 0) - (a.fav ?? 0) || (b.lastUsed ?? 0) - (a.lastUsed ?? 0)).slice(0, 30)
     }
     return [...saved, ...LOCAL_FOODS.filter((f) => !savedIds.has(f.id))]
-      .filter((f) => words.every((w) => norm(f.name + ' ' + (f.brand ?? '')).includes(w)))
-      .sort((a, b) => (b.fav ?? 0) - (a.fav ?? 0) || (b.lastUsed ?? 0) - (a.lastUsed ?? 0))
+      .map((f) => ({ f, sc: textScore(norm(f.name + ' ' + (f.brand ?? '')), words) }))
+      .filter((x) => x.sc > 0)
+      .sort((a, b) => (b.f.fav ?? 0) - (a.f.fav ?? 0) || (b.f.lastUsed ? 1 : 0) - (a.f.lastUsed ? 1 : 0) || b.sc - a.sc)
       .slice(0, 30)
+      .map((x) => x.f)
   }, [q, saved, store])
 
   const mineIds = new Set(mine.map((f) => f.id))
@@ -269,36 +272,59 @@ function QuickTab({ meal, date, defaultTime, onDone }: { meal: number; date: str
 }
 
 function AmountSheet({ food, meal, date, defaultTime, onClose, onDone }: { food: Food; meal: number; date: string; defaultTime: string; onClose: () => void; onDone: () => void }) {
-  const [grams, setGrams] = useState<number | undefined>(food.portion ?? 100)
+  const units = unitsFor(food)
+  // -1 = gramy; domyślnie pierwsza miara domowa (np. „1 kromka”), gdy ją znamy
+  const [ui, setUi] = useState(units.length ? 0 : -1)
+  const [qty, setQty] = useState<number | undefined>(units.length ? 1 : food.portion ?? 100)
   const [m, setM] = useState(meal)
   const [time, setTime] = useState(defaultTime)
   const stored = useLiveQuery(() => db.foods.get(food.id), [food.id])
   const fav = stored?.fav === 1
-  const g = grams ?? 0
+  const unit = ui >= 0 ? units[ui] : undefined
+  const g = Math.round((qty ?? 0) * (unit?.g ?? 1) * 10) / 10
   const v = scaleFood(food, g)
+  function pickUnit(i: number) {
+    if (i === ui) return
+    setUi(i)
+    setQty(i >= 0 ? 1 : g || food.portion || 100)
+  }
   async function add() {
     if (!g) return
     await db.foods.put({ ...food, ...(stored ?? {}), lastUsed: Date.now() })
-    await db.foodLog.add({ date, time, meal: m, foodId: food.id, name: food.name + (food.brand ? ` (${food.brand})` : ''), grams: g, ...v })
+    await db.foodLog.add({
+      date, time, meal: m, foodId: food.id, name: food.name + (food.brand ? ` (${food.brand})` : ''), grams: g,
+      amount: unit && qty ? unitLabel(unit, qty) : undefined, ...v,
+    })
     onDone()
   }
   async function toggleFav() {
     await db.foods.put({ ...food, ...(stored ?? {}), fav: fav ? 0 : 1 })
   }
-  const quick = [...new Set([food.portion, 50, 100, 150, 200].filter((x): x is number => !!x))]
+  const quick = unit ? [0.5, 1, 2, 3] : [...new Set([50, 100, 150, 200])]
   return (
     <Sheet title={food.name} onClose={onClose}>
       {food.brand && <div className="muted small" style={{ marginTop: -10 }}>{food.brand}</div>}
+      {units.length > 0 && (
+        <div className="chips" role="radiogroup" aria-label="Miara">
+          {units.map((u, i) => (
+            <button key={i} role="radio" aria-checked={ui === i} className={'chip' + (ui === i ? ' on' : '')} onClick={() => pickUnit(i)}>
+              {u.n[0]} <span className="muted">{fmtQty(u.g)} g</span>
+            </button>
+          ))}
+          <button role="radio" aria-checked={ui === -1} className={'chip' + (ui === -1 ? ' on' : '')} onClick={() => pickUnit(-1)}>gramy</button>
+        </div>
+      )}
       <div className="hstack">
-        <div style={{ flex: 1 }}><NumInput value={grams} onChange={setGrams} ariaLabel="Ilość w gramach" /></div>
-        <span className="muted">gramów</span>
+        <div style={{ flex: 1 }}><NumInput value={qty} onChange={setQty} ariaLabel={unit ? `Ilość: ${unit.n[2]}` : 'Ilość w gramach'} /></div>
+        <span className="muted">{unit ? (qty ? unitLabel(unit, qty).replace(/^\S+\s/, '') : unit.n[2]) : 'gramów'}</span>
       </div>
       <div className="hstack wrap" style={{ gap: 6 }}>
         {quick.map((q) => (
-          <button key={q} className={'chip' + (g === q ? ' on' : '')} onClick={() => setGrams(q)}>
-            {q === food.portion && food.portionName ? `${food.portionName} (${q} g)` : q === food.portion ? `porcja (${q} g)` : `${q} g`}
+          <button key={q} className={'chip' + (qty === q ? ' on' : '')} onClick={() => setQty(q)}>
+            {unit ? fmtQty(q) : `${q} g`}
           </button>
         ))}
+        {unit && <span className="small muted" style={{ alignSelf: 'center', marginLeft: 'auto' }}>= {fmtQty(g)} g</span>}
       </div>
       <MacroTiles kcal={v.kcal} p={v.p} c={v.c} f={v.f} />
       <div className="card">

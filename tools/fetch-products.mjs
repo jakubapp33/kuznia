@@ -4,8 +4,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 
 const API = 'https://search.openfoodfacts.org/search'
-const UA = 'Kuznia/0.2 (https://github.com/jakubapp33/kuznia)'
-const BASE = 'countries_tags:"en:poland" AND states_tags:"en:nutrition-facts-completed"'
+const UA = 'Kuznia/0.3 (https://github.com/jakubapp33/kuznia)'
+// bez filtra „nutrition-facts-completed” – wystarczy, że produkt ma kcal, białko, tłuszcz i węgle (sprawdzane niżej)
+const PL = 'countries_tags:"en:poland"'
 const FIELDS = 'code,product_name,product_name_pl,brands,nutriments,serving_quantity,unique_scans_n'
 
 /** mikroskładniki: klucz OFF → [nasz klucz, mnożnik z g do jednostki docelowej] */
@@ -32,8 +33,10 @@ const MICROS = {
 
 // partycje, żeby każda miała < 10 000 wyników (limit wyszukiwarki)
 const PARTS = [
-  ...Array.from({ length: 10 }, (_, i) => `code:590${i}*`),
-  'NOT code:590*',
+  ...Array.from({ length: 10 }, (_, i) => `${PL} AND code:590${i}*`),
+  `${PL} AND NOT code:590*`,
+  // produkty z polską nazwą, oznaczone tylko innym krajem (np. marki Lidla)
+  `lang:pl AND NOT ${PL}`,
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -66,7 +69,7 @@ function clean(s) {
 
 const out = new Map()
 for (const part of PARTS) {
-  const q = `${BASE} AND ${part}`
+  const q = part
   let page = 1
   let pages = 1
   do {

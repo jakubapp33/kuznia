@@ -1,5 +1,5 @@
 import type { Food, Micro } from '../types'
-import { norm } from './search'
+import { norm, queryStems, textScore } from './search'
 
 /** Wbudowana baza polskich produktów (Open Food Facts, ODbL) – pobierana raz, potem działa offline. */
 type Row = [string, string, string, number, number, number, number, number, number, number, number, number, Micro | 0]
@@ -54,20 +54,22 @@ export const STORES: { id: string; name: string; brands: string[] }[] = [
 
 export async function searchProducts(q: string, store = '', limit = 60): Promise<Food[]> {
   const all = await loadProducts()
-  const words = norm(q).split(/\s+/).filter(Boolean)
+  const words = queryStems(q)
   const st = STORES.find((s) => s.id === store)
-  const out: Food[] = []
+  const out: { f: Food; sc: number }[] = []
   for (const it of all) {
     if (st) {
       const b = norm(it.food.brand ?? '')
       if (!st.brands.some((x) => b === x || b.startsWith(x + ' '))) continue
     }
-    if (words.every((w) => it.hay.includes(w))) {
-      out.push(it.food)
-      if (out.length >= limit) break
+    // baza jest posortowana od najpopularniejszych – najlepsze dopasowania z pierwszych trafień
+    const sc = textScore(it.hay, words)
+    if (sc > 0) {
+      out.push({ f: it.food, sc })
+      if (out.length >= limit * 3) break
     }
   }
-  return out
+  return out.sort((a, b) => b.sc - a.sc).slice(0, limit).map((x) => x.f)
 }
 
 export async function findBarcode(code: string): Promise<Food | undefined> {

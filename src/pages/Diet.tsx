@@ -92,7 +92,7 @@ export function Diet() {
                       <div className="grow">
                         <div className="title small">{f.name}</div>
                         <div className="food-macros">
-                          {f.grams ? `${num(f.grams, 0)} g · ` : ''}B {num(f.p)} · W {num(f.c)} · T {num(f.f)}
+                          {f.amount ? `${f.amount} (${num(f.grams ?? 0, 0)} g) · ` : f.grams ? `${num(f.grams, 0)} g · ` : ''}B {num(f.p)} · W {num(f.c)} · T {num(f.f)}
                         </div>
                       </div>
                       <span className="num small">{Math.round(f.kcal)}</span>
@@ -123,7 +123,7 @@ function EditEntry({ entry, onClose }: { entry: FoodLogEntry; onClose: () => voi
   const k = entry.grams && grams ? grams / entry.grams : 1
   const scaled = { ...entry, ...rescaleEntry(entry, k) }
   async function save() {
-    await db.foodLog.update(entry.id!, { grams, meal, time: time || undefined, ...rescaleEntry(entry, k) })
+    await db.foodLog.update(entry.id!, { grams, meal, time: time || undefined, ...(grams !== entry.grams ? { amount: undefined } : {}), ...rescaleEntry(entry, k) })
     onClose()
   }
   async function remove() {
@@ -133,7 +133,7 @@ function EditEntry({ entry, onClose }: { entry: FoodLogEntry; onClose: () => voi
   return (
     <Sheet title={entry.name} onClose={onClose}>
       {entry.grams !== undefined && (
-        <label className="field"><span>Ilość (g)</span><NumInput value={grams} onChange={setGrams} /></label>
+        <label className="field"><span>Ilość (g){entry.amount && grams === entry.grams ? ` – ${entry.amount}` : ''}</span><NumInput value={grams} onChange={setGrams} /></label>
       )}
       <MacroTiles kcal={scaled.kcal} p={scaled.p} c={scaled.c} f={scaled.f} />
       {(scaled.micro || scaled.sugar !== undefined) && <div className="card"><Nutrients v={scaled} /></div>}

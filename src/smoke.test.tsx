@@ -125,6 +125,24 @@ describe('nowe funkcje', () => {
     expect(container.ownerDocument.body.textContent).toContain('Witamina C')
     expect(container.ownerDocument.body.textContent).toContain('Godzina posiłku')
   })
+  it('miary domowe: 2 łyżeczki miodu', async () => {
+    const { getByPlaceholderText, findAllByText } = await show('/dieta/dodaj?meal=0')
+    fireEvent.change(getByPlaceholderText(/skyr/), { target: { value: 'miód' } })
+    await act(async () => { await new Promise((res) => setTimeout(res, 300)) })
+    ;(await findAllByText('Miód'))[0].click()
+    await act(async () => { await new Promise((res) => setTimeout(res, 300)) })
+    const body = document.body
+    const chip = [...body.querySelectorAll<HTMLButtonElement>('[role=radio]')].find((b) => b.textContent?.startsWith('łyżeczka'))!
+    await act(async () => { chip.click() })
+    const two = [...body.querySelectorAll<HTMLButtonElement>('.chip')].find((b) => b.textContent === '2')!
+    await act(async () => { two.click() })
+    expect(body.textContent).toContain('= 24 g')
+    const add = [...body.querySelectorAll<HTMLButtonElement>('.btn.primary.lg')].find((b) => b.textContent === 'Dodaj')!
+    await act(async () => { add.click() })
+    await act(async () => { await new Promise((res) => setTimeout(res, 300)) })
+    const e = (await db.foodLog.toArray()).find((x) => x.name === 'Miód')!
+    expect([e.grams, e.amount]).toEqual([24, '2 łyżeczki'])
+  })
   it('dziennik diety: dzienniczek i szczegóły dnia', async () => {
     const { container, getByText } = await show('/dieta')
     expect(container.textContent).toContain('Dzienniczek')

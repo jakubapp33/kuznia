@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { GROUPS, MUSCLES } from '../data/muscles'
 import { useExercises } from '../lib/hooks'
-import { filterExercises } from '../lib/search'
+import { searchExercises } from '../lib/search'
 import type { Exercise } from '../types'
 import { Icon } from './Icon'
 import { Sheet } from './ui'
@@ -11,7 +11,7 @@ export function ExerciseFilters({ q, setQ, group, setGroup }: { q: string; setQ:
     <>
       <div className="search">
         <Icon name="search" size={18} />
-        <input className="input" type="search" placeholder="Szukaj (PL lub EN)…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input" type="search" placeholder="Szukaj: nazwa, partia (np. łydki), sprzęt…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       <div className="chips">
         <button className={'chip' + (group === '' ? ' on' : '')} onClick={() => setGroup('')}>Wszystkie</button>
@@ -39,10 +39,11 @@ export function ExercisePicker({ onPick, onClose, title = 'Dodaj ćwiczenie' }: 
   const { all } = useExercises()
   const [q, setQ] = useState('')
   const [group, setGroup] = useState('')
-  const list = filterExercises(all, q, group, '')
+  const { list, similar } = searchExercises(all, q, group, '')
   return (
     <Sheet title={title} onClose={onClose}>
       <ExerciseFilters q={q} setQ={setQ} group={group} setGroup={setGroup} />
+      {similar && <div className="note small">Brak dokładnego wyniku – podobne ćwiczenia:</div>}
       <div className="card flush list">
         {list.slice(0, 120).map((e) => (
           <ExerciseRow key={e.id} e={e} onClick={() => onPick(e)} />

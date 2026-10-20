@@ -26,8 +26,9 @@ function prevText(ex: Exercise | undefined, s: SetEntry | undefined) {
   if (!s) return '–'
   if (ex?.load === 'cardio') return `${num(s.t ?? 0, 0)} min`
   if (ex?.load === 'time') return `${s.w ? num(s.w) + '×' : ''}${s.t ?? 0}s`
-  if (ex?.load === 'bodyweight' && !s.w) return `${s.r ?? 0}`
-  return `${num(s.w ?? 0)}×${s.r ?? 0}`
+  const rir = s.rir !== undefined ? ` @${s.rir}` : ''
+  if (ex?.load === 'bodyweight' && !s.w) return `${s.r ?? 0}${rir}`
+  return `${num(s.w ?? 0)}×${s.r ?? 0}${rir}`
 }
 
 export function Session() {
@@ -282,6 +283,7 @@ function ExerciseCard({
               <th>Poprz.</th>
               <th>{cols[0]}</th>
               <th>{cols[1]}</th>
+              {load !== 'cardio' && <th style={{ width: 44 }} title="Ile powtórzeń zostało w zapasie">RIR</th>}
               <th style={{ width: 46 }}><Icon name="check" size={14} /></th>
             </tr>
           </thead>
@@ -320,6 +322,9 @@ function ExerciseCard({
                           <NumInput className="" decimal={false} value={s.r} placeholder={String(sug?.reps ?? we.repMax ?? '')} onChange={(v) => onChange((x) => { x.sets[si].r = v })} ariaLabel="Powtórzenia" />
                         )}
                       </td>
+                      <td className="rir">
+                        <NumInput className="" decimal={false} value={s.rir} placeholder={s.warmup ? '' : we.rir !== undefined ? String(we.rir) : '–'} onChange={(v) => onChange((x) => { x.sets[si].rir = v === undefined ? undefined : Math.min(10, v) })} ariaLabel="RIR – powtórzenia w zapasie" />
+                      </td>
                     </>
                   )}
                   <td>
@@ -333,6 +338,9 @@ function ExerciseCard({
           </tbody>
         </table>
       </div>
+      {load !== 'cardio' && we.sets.some((s) => s.done) && !we.sets.some((s) => s.rir !== undefined) && (
+        <div className="tiny muted" style={{ padding: '2px 16px 0' }}>RIR = ile powtórzeń dałbyś jeszcze radę zrobić (0 = do upadku). Wpisuj, a lepiej dobiorę ciężar.</div>
+      )}
       <div className="hstack" style={{ padding: '4px 8px 6px' }}>
         <button
           className="btn ghost sm"

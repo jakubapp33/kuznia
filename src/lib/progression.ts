@@ -72,7 +72,16 @@ export function suggest(ex: Exercise, repMin: number, repMax: number, history: W
     }
     return { weight: w || undefined, reps: repMin, text: `Ostatnio poniżej zakresu – zostań przy ${w ? fmtKg(w) : 'tej wersji'} i celuj w ${repMin} powt.`, kind: 'hold' }
   }
+  // RIR (zapas powtórzeń): duży zapas w każdej serii = ciężar jest za lekki, mimo że nie doszedłeś do góry zakresu
+  const rirs = sameW.map((s) => s.rir).filter((x): x is number => x !== undefined)
+  if (w > 0 && rirs.length === sameW.length && Math.min(...rirs) >= 4) {
+    const nw = roundTo(w + (ex.inc || 2.5), 0.25)
+    return { weight: nw, reps: Math.max(repMin, minReps - 1), text: `Ostatnio zapas ${Math.min(...rirs)}+ powt. w każdej serii – ciężar jest za lekki, spróbuj ${fmtKg(nw)}.`, kind: 'increase' }
+  }
   const target = Math.min(repMax, minReps + 1)
+  if (rirs.length === sameW.length && rirs.length > 0 && Math.max(...rirs) === 0 && minReps >= repMin) {
+    return { weight: w || undefined, reps: minReps, text: `Ostatnio każda seria do upadku (RIR 0). Zostań przy ${w ? fmtKg(w) : 'tej wersji'} i powtórz ${minReps} powt. z 1–2 w zapasie – szybciej się zregenerujesz.`, kind: 'hold' }
+  }
   return { weight: w || undefined, reps: target, text: `Zostań przy ${w ? fmtKg(w) : 'tej wersji'} i dołóż powtórzenie (cel: ${target} w każdej serii).`, kind: 'reps' }
 }
 

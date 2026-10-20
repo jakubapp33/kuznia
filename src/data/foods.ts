@@ -1,4 +1,5 @@
 import type { Food } from '../types'
+import { EXTRA_FOODS } from './foods-extra'
 
 /** nazwa, kcal, białko, tłuszcz, węglowodany, błonnik (na 100 g), porcja g, nazwa porcji */
 function f(name: string, kcal: number, p: number, fat: number, c: number, fiber = 0, portion?: number, portionName?: string): Food {
@@ -288,7 +289,7 @@ const DETAILS: Record<string, string> = {
 
 const MICRO_KEYS = ['k', 'ca', 'mg', 'fe', 'zn', 'vc', 'vd', 'b12', 'b9']
 
-export const LOCAL_FOODS: Food[] = BASE_FOODS.map((food) => {
+const WITH_DETAILS: Food[] = BASE_FOODS.map((food) => {
   const d = DETAILS[food.name]
   if (!d) return food
   const [sugar, satFat, salt, ...rest] = d.split(',').map(Number)
@@ -298,3 +299,7 @@ export const LOCAL_FOODS: Food[] = BASE_FOODS.map((food) => {
   })
   return { ...food, sugar, satFat, salt, micro }
 })
+
+const baseIds = new Set(WITH_DETAILS.map((f) => f.id))
+/** produkty ogólne: podstawowe (z witaminami) + dodatkowe dania i produkty */
+export const LOCAL_FOODS: Food[] = [...WITH_DETAILS, ...EXTRA_FOODS.filter((f) => !baseIds.has(f.id))]

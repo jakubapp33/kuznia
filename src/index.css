@@ -1182,3 +1182,16 @@ pre.code {
   user-select: all;
   -webkit-user-select: all;
 }
+
+.sets td.rir input {
+  max-width: 44px;
+}
+
+@media (max-width: 380px) {
+  .sets input {
+    max-width: 62px;
+  }
+  .sets .prev {
+    font-size: 12px;
+  }
+}
