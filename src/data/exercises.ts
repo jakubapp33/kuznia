@@ -1,4 +1,5 @@
 import type { Equipment, Exercise, LoadType, MuscleId } from '../types'
+import { BASE_ALIASES, EXTRA_EXERCISES } from './exercises-extra'
 
 const EQ: Record<string, Equipment> = {
   S: 'sztanga', H: 'hantle', M: 'maszyna', W: 'wyciąg', C: 'masa ciała', K: 'kettlebell', I: 'inne', R: 'cardio',
@@ -22,7 +23,7 @@ function x(
   }
 }
 
-export const EXERCISES: Exercise[] = [
+const BASE_EXERCISES: Exercise[] = [
   // ───────── KLATKA ─────────
   x('bench-press', 'Wyciskanie sztangi leżąc', 'Barbell bench press', 'S', 1, 'chest', 'front-delts triceps', 2.5,
     'Połóż się na ławce, oczy pod gryfem, stopy mocno na podłodze.|Ściągnij łopatki do siebie i w dół, lekko wygnij odcinek piersiowy.|Chwyć gryf nieco szerzej niż barki, zdejmij go nad barki.|Opuść gryf kontrolowanie do dolnej części klatki, łokcie ok. 45–70° od tułowia.|Wypchnij gryf w górę i lekko w stronę twarzy.',
@@ -540,6 +541,12 @@ export const EXERCISES: Exercise[] = [
   x('band-lateral-raise', 'Wznosy bokiem z gumą', 'Band lateral raise', 'I', 0, 'side-delts', '', 0,
     'Stań na gumie, trzymaj końce.|Unieś ręce bokiem do wysokości barków.|Opuść powoli.',
     'Dobra opcja w domu lub w podróży.', 'bodyweight'),
+]
+
+/** podstawowa baza + dodatkowe ćwiczenia; potoczne nazwy (allahy, francuz, bułgary…) do wyszukiwania */
+export const EXERCISES: Exercise[] = [
+  ...BASE_EXERCISES.map((e) => (BASE_ALIASES[e.id] ? { ...e, aliases: BASE_ALIASES[e.id].split('|') } : e)),
+  ...EXTRA_EXERCISES,
 ]
 
 export const EXERCISE_MAP = new Map(EXERCISES.map((e) => [e.id, e]))

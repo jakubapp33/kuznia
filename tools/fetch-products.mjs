@@ -83,8 +83,15 @@ for (const part of PARTS) {
       const p = num(n.proteins_100g)
       const f = num(n.fat_100g)
       const c = num(n.carbohydrates_100g)
-      if (!h.code || !name || name.length < 2 || kcal === undefined || p === undefined || f === undefined || c === undefined) continue
-      if (kcal > 950 || p + f + c > 105) continue // błędne dane
+      if (!h.code || !name || name.length < 2) continue
+      // bez kompletu wartości: zapisujemy samą nazwę i markę (kcal = -1) – użytkownik uzupełni z etykiety
+      const complete = kcal !== undefined && p !== undefined && f !== undefined && c !== undefined && kcal <= 950 && p + f + c <= 105
+      if (!complete) {
+        const brand0 = clean(Array.isArray(h.brands) ? h.brands[0] : String(h.brands ?? '').split(',')[0])
+        if (!brand0) continue // bez marki trudno rozpoznać produkt
+        if (!out.has(h.code)) out.set(h.code, [h.code, name.slice(0, 80), brand0.slice(0, 40), -1, -1, -1, -1, -1, -1, -1, -1, 0, 0])
+        continue
+      }
       const brand = clean(Array.isArray(h.brands) ? h.brands[0] : String(h.brands ?? '').split(',')[0])
       const micro = {}
       for (const [k, [key, mul]] of Object.entries(MICROS)) {
@@ -118,7 +125,7 @@ mkdirSync(new URL('../public/data/', import.meta.url), { recursive: true })
 const data = {
   source: 'Open Food Facts (openfoodfacts.org), licencja ODbL',
   fetchedAt: new Date().toISOString().slice(0, 10),
-  // kolejność pól: kod, nazwa, marka, kcal, białko, tłuszcz, węgle, błonnik, cukry, kw. nasycone, sól, porcja g, mikro
+  // kolejność pól: kod, nazwa, marka, kcal, białko, tłuszcz, węgle, błonnik, cukry, kw. nasycone, sól, porcja g, mikro (kcal = -1: brak wartości)
   products: [...out.values()],
 }
 writeFileSync(new URL('../public/data/products.json', import.meta.url), JSON.stringify(data))

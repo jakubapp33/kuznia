@@ -7,8 +7,8 @@ import { newId } from '../lib/workout'
 export function FoodForm() {
   const [params] = useSearchParams()
   const nav = useNavigate()
-  const [name, setName] = useState('')
-  const [brand, setBrand] = useState('')
+  const [name, setName] = useState(params.get('name') ?? '')
+  const [brand, setBrand] = useState(params.get('brand') ?? '')
   const [barcode, setBarcode] = useState(params.get('barcode') ?? '')
   const [kcal, setKcal] = useState<number | undefined>()
   const [p, setP] = useState<number | undefined>()
@@ -35,7 +35,10 @@ export function FoodForm() {
 
   return (
     <div className="page">
-      <TopBar title="Nowy produkt" />
+      <TopBar title={params.get('name') ? 'Uzupełnij produkt' : 'Nowy produkt'} />
+      {params.get('name') && (
+        <div className="note small">Ten produkt jest w bazie, ale bez wartości odżywczych. Przepisz je z etykiety (na 100 g) – zapiszę go w Twoich produktach i następnym razem dodasz go od razu.</div>
+      )}
       <div className="card stack">
         <Field label="Nazwa *"><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></Field>
         <Field label="Marka"><input className="input" value={brand} onChange={(e) => setBrand(e.target.value)} /></Field>

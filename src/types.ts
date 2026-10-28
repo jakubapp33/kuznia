@@ -22,6 +22,8 @@ export interface Exercise {
   /** krok zwiększania ciężaru w kg */
   inc: number
   custom?: boolean
+  /** inne, potoczne nazwy (do wyszukiwania), np. „allahy” */
+  aliases?: string[]
 }
 
 export interface PlanExercise {
@@ -134,6 +136,8 @@ export interface Food {
   /** miary domowe (gdy brak – dobierane po nazwie, patrz lib/units) */
   units?: { n: [string, string, string]; g: number }[]
   barcode?: string
+  /** produkt z bazy bez wartości odżywczych – do uzupełnienia z etykiety */
+  incomplete?: boolean
   lastUsed?: number
   fav?: 0 | 1
 }

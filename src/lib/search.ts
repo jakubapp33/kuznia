@@ -71,44 +71,67 @@ function prefix(a: string, b: string) {
   return i
 }
 
-/** odległość edycyjna z limitem – do literówek */
-function lev(a: string, b: string, max: number) {
+const ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
+const POS = new Map<string, [number, number]>()
+ROWS.forEach((r, y) => [...r].forEach((ch, x) => POS.set(ch, [x + y * 0.5, y])))
+/** litery sąsiadujące na klawiaturze – częsta literówka na telefonie */
+function adjacent(a: string, b: string) {
+  const p = POS.get(a)
+  const q = POS.get(b)
+  return !!p && !!q && Math.abs(p[0] - q[0]) <= 1 && Math.abs(p[1] - q[1]) <= 1
+}
+
+/**
+ * Odległość „literówkowa”: wstawienie/usunięcie = 1, zamiana = 1 (0,5 dla sąsiednich klawiszy),
+ * przestawienie dwóch liter = 0,5. Przerywa, gdy przekroczy max.
+ */
+export function typoDistance(a: string, b: string, max: number) {
   if (Math.abs(a.length - b.length) > max) return max + 1
-  let prev = Array.from({ length: b.length + 1 }, (_, i) => i)
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => [i])
+  for (let j = 1; j <= b.length; j++) d[0][j] = j
   for (let i = 1; i <= a.length; i++) {
-    const cur = [i]
-    let rowMin = i
+    let rowMin = Infinity
     for (let j = 1; j <= b.length; j++) {
-      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
-      rowMin = Math.min(rowMin, cur[j])
+      const sub = a[i - 1] === b[j - 1] ? 0 : adjacent(a[i - 1], b[j - 1]) ? 0.5 : 1
+      let v = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + sub)
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, d[i - 2][j - 2] + 0.5)
+      d[i][j] = v
+      rowMin = Math.min(rowMin, v)
     }
     if (rowMin > max) return max + 1
-    prev = cur
   }
-  return prev[b.length]
+  return d[a.length][b.length]
+}
+
+/** dopuszczalna liczba literówek dla słowa (luźniej, gdy szukamy „podobnych”) */
+export function typoLimit(len: number, loose = false) {
+  if (len < 4) return loose ? 1 : 0.5
+  if (len < 7) return loose ? 2 : 1
+  return loose ? 3 : 2
 }
 
 /**
  * Jak dobrze słowo z zapytania pasuje do słowa z opisu (0 = wcale).
  * Polska odmiana: „łydki” ~ „łydek”, „pleców” ~ „plecy” – wystarczy wspólny rdzeń.
  */
-function wordMatch(q: string, t: string, fuzzy: boolean): number {
+function wordMatch(q: string, t: string, fuzzy: boolean, loose = false): number {
   if (t === q) return 3
   if (t.startsWith(q)) return q.length >= 3 ? 2.6 : 1.5
   if (q.length >= 4 && t.includes(q)) return 2
   const p = prefix(q, t)
   if (p >= 4 && p >= Math.min(q.length, t.length) - 2) return 2.2
-  if (fuzzy && q.length >= 4) {
-    const d = lev(q, t.slice(0, q.length + 1), q.length >= 7 ? 2 : 1)
-    if (d <= (q.length >= 7 ? 2 : 1)) return 1.2
-    if (lev(q, t, q.length >= 7 ? 2 : 1) <= (q.length >= 7 ? 2 : 1)) return 1.2
+  if (fuzzy && q.length >= 3) {
+    const lim = typoLimit(q.length, loose)
+    // całe słowo albo jego początek (np. „maszyne” ~ „maszynie”)
+    const d = Math.min(typoDistance(q, t, lim), typoDistance(q, t.slice(0, q.length), lim))
+    if (d <= lim) return 1.4 - (d / lim) * 0.6
   }
   return 0
 }
 
-function bestIn(q: string, toks: string[], fuzzy: boolean) {
+function bestIn(q: string, toks: string[], fuzzy: boolean, loose = false) {
   let best = 0
-  for (const t of toks) best = Math.max(best, wordMatch(q, t, fuzzy))
+  for (const t of toks) best = Math.max(best, wordMatch(q, t, fuzzy, loose))
   return best
 }
 
@@ -129,7 +152,7 @@ function index(e: Exercise): Indexed {
     const groupNames = (ms: MuscleId[]) => ms.flatMap((m) => [MUSCLES[m], m === 'lower-back' ? '' : GROUPS.find((g) => g.muscles.includes(m))?.name ?? ''])
     ix = {
       e,
-      name: tokens(e.pl + ' ' + e.en),
+      name: tokens(e.pl + ' ' + e.en + ' ' + (e.aliases ?? []).join(' ')),
       primary: new Set(e.primary),
       secondary: new Set(e.secondary),
       muscleTok: tokens(groupNames(e.primary).join(' ') + ' ' + e.equipment),
@@ -150,10 +173,10 @@ function synEquip(q: string): string | undefined {
   return EQUIP_SYN.find(([words]) => words.some((w) => wordMatch(q, w, false) >= 2.2))?.[1]
 }
 
-function scoreWord(ix: Indexed, q: string, fuzzy: boolean): number {
-  let s = bestIn(q, ix.name, fuzzy) * 1.2
-  s = Math.max(s, bestIn(q, ix.muscleTok, fuzzy))
-  s = Math.max(s, bestIn(q, ix.secTok, fuzzy) * 0.4)
+function scoreWord(ix: Indexed, q: string, fuzzy: boolean, loose = false): number {
+  let s = bestIn(q, ix.name, fuzzy, loose) * 1.2
+  s = Math.max(s, bestIn(q, ix.muscleTok, fuzzy, loose))
+  s = Math.max(s, bestIn(q, ix.secTok, fuzzy, loose) * 0.4)
   const ms = synMuscles(q, fuzzy)
   if (ms.size) {
     if ([...ms].some((m) => ix.primary.has(m))) s = Math.max(s, 2.4)
@@ -180,12 +203,13 @@ export function searchExercises(list: Exercise[], q: string, group: string, equi
   const base = list.filter((e) => (!g || e.primary.some((m) => g.muscles.includes(m))) && (!equipment || e.equipment === equipment))
   if (!words.length) return { list: base, similar: false }
 
-  const rank = (fuzzy: boolean, every: boolean) =>
+  const rank = (fuzzy: boolean, every: boolean, loose = false) =>
     base
       .map((e) => {
         const ix = index(e)
-        const s = words.map((w) => scoreWord(ix, w, fuzzy))
-        const ok = every ? s.every((x) => x > 0) : s.some((x) => x > 0)
+        const s = words.map((w) => scoreWord(ix, w, fuzzy, loose))
+        // krótkie słowa („na”, „z”, „w”) nie muszą pasować
+        const ok = every ? s.every((x, i) => x > 0 || words[i].length <= 2) && s.some((x) => x > 0) : s.some((x) => x > 0)
         return { e, score: ok ? s.reduce((a, b) => a + b, 0) + (e.compound ? 0.05 : 0) : 0 }
       })
       .filter((x) => x.score > 0)
@@ -196,7 +220,10 @@ export function searchExercises(list: Exercise[], q: string, group: string, equi
   if (exact.length) return { list: exact, similar: false }
   const fuzzy = rank(true, true)
   if (fuzzy.length) return { list: fuzzy, similar: false }
-  return { list: rank(true, false).slice(0, 30), similar: true }
+  // większe literówki: wszystkie słowa pasują „luźno” → pokazujemy jako podobne
+  const loose = rank(true, true, true)
+  if (loose.length) return { list: loose.slice(0, 30), similar: true }
+  return { list: rank(true, false, true).slice(0, 30), similar: true }
 }
 
 export function filterExercises(list: Exercise[], q: string, group: string, equipment: string): Exercise[] {

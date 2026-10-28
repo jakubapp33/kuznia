@@ -38,8 +38,10 @@ A free training and diet PWA in Polish, for one user on an iPhone. Live at https
 - v0.2: micronutrients, 12k-product store database, journal (sleep, water, energy, note), meal times, insights, weight analysis.
 - v0.3: steps and kcal from the watch, 14-day energy balance compared with weight, "Wklej z Garmina" through an iOS Shortcut (`/garmin`).
 - v0.4: household measures, about 450 new products and dishes, exercise search by muscle groups, RIR column in sessions.
+- v0.5: about 296 exercises (`src/data/exercises-extra.ts`, with slang aliases such as allahy/francuz/OHP). Keyboard-aware typo search (`typoDistance`) for exercises and products (`correctQuery`). 16k products, including OFF products without nutrition (`incomplete`, filled in from the label). The camera stream is shared between scans.
 
 ## Known limits and open items
-- Open Food Facts is exhausted: about 12.8k Polish products with macros. More coverage means adding generic foods by hand.
+- Open Food Facts is exhausted: about 12.8k Polish products with macros, plus about 3.4k with name and brand only. Fitatu's database is proprietary (users + AI from photos + dietitians); no free API covers Polish brands.
+- iOS asks for camera permission per app launch; we keep one stream per session.
 - The iOS Shortcut for Garmin has not yet been tested by the user on an iPhone.
 - The phone layout (e.g. the sets table with the RIR column) has not been checked on a real device.

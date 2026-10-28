@@ -126,7 +126,7 @@ describe('nowe funkcje', () => {
     expect(container.ownerDocument.body.textContent).toContain('Godzina posiłku')
   })
   it('miary domowe: 2 łyżeczki miodu', async () => {
-    const { getByPlaceholderText, findAllByText } = await show('/dieta/dodaj?meal=0')
+    const { getByPlaceholderText, findAllByText } = await show('/dieta/dodaj?meal=1')
     fireEvent.change(getByPlaceholderText(/skyr/), { target: { value: 'miód' } })
     await act(async () => { await new Promise((res) => setTimeout(res, 300)) })
     ;(await findAllByText('Miód'))[0].click()

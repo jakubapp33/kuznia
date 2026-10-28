@@ -109,3 +109,22 @@ describe('wyszukiwanie', () => {
     expect(textScore(norm('Płatki owsiane'), st)).toBeGreaterThan(0)
   })
 })
+
+describe('nowe ćwiczenia i literówki', () => {
+  const ex = (q: string) => searchExercises(EXERCISES, q, '', '')
+  it('baza ma ok. 300 ćwiczeń z unikalnymi id i poprawnymi mięśniami', () => {
+    expect(EXERCISES.length).toBeGreaterThanOrEqual(290)
+    expect(new Set(EXERCISES.map((e) => e.id)).size).toBe(EXERCISES.length)
+    for (const e of EXERCISES) for (const m of [...e.primary, ...e.secondary]) expect(MUSCLES[m], `${e.id}: ${m}`).toBeDefined()
+  })
+  it('potoczne nazwy i literówki', () => {
+    expect(ex('allahy').list[0].id).toBe('cable-crunch')
+    expect(ex('allachy').list[0].id).toBe('cable-crunch')
+    expect(ex('hjak').list[0].id).toBe('hack-squat')
+    expect(ex('przysiad na maszynie hjak').list[0].id).toBe('hack-squat')
+    expect(ex('ludki siedzac').list[0].id).toBe('seated-calf-raise')
+    expect(ex('ohp').list[0].id).toBe('ohp')
+    expect(ex('francuz').list.length).toBeGreaterThan(1)
+    expect(ex('wyciksanie lezac').list[0].pl).toContain('Wyciskanie')
+  })
+})

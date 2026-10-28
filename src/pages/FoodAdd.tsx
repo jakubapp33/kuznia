@@ -10,7 +10,7 @@ import { db } from '../db/db'
 import { MEAL_TIMES, nowTime, scaleFood } from '../lib/foodcalc'
 import { isoDate, num } from '../lib/format'
 import { lookupBarcode, searchOff } from '../lib/off'
-import { STORES, findBarcode, loadProducts, searchProducts } from '../lib/products'
+import { STORES, correctQuery, findBarcode, loadProducts, searchProducts } from '../lib/products'
 import { norm, queryStems, textScore } from '../lib/search'
 import { fmtQty, unitLabel, unitsFor } from '../lib/units'
 import type { Food } from '../types'
@@ -28,6 +28,12 @@ export function FoodAdd() {
   const defaultTime = date === isoDate() ? nowTime() : MEAL_TIMES[meal] ?? '12:00'
 
   const done = () => nav(`/dieta${date === isoDate() ? '' : `?d=${date}`}`, { replace: true })
+  const pick = (f: Food) => {
+    if (!f.incomplete) return setPicked(f)
+    // produkt bez wartości – uzupełnij raz z etykiety, potem jest w „Moich produktach”
+    const p = new URLSearchParams({ name: f.name, ...(f.brand ? { brand: f.brand } : {}), ...(f.barcode ? { barcode: f.barcode } : {}) })
+    nav(`/dieta/produkt?${p}`)
+  }
 
   return (
     <div className="page">
@@ -41,8 +47,8 @@ export function FoodAdd() {
           { value: 'quick', label: 'Szybko' },
         ]}
       />
-      {tab === 'search' && <SearchTab onPick={setPicked} />}
-      {tab === 'scan' && <ScanTab onPick={setPicked} />}
+      {tab === 'search' && <SearchTab onPick={pick} />}
+      {tab === 'scan' && <ScanTab onPick={pick} />}
       {tab === 'quick' && <QuickTab meal={meal} date={date} defaultTime={defaultTime} onDone={done} />}
       {picked && <AmountSheet food={picked} meal={meal} date={date} defaultTime={defaultTime} onClose={() => setPicked(null)} onDone={done} />}
     </div>
@@ -55,10 +61,11 @@ function FoodRow({ f, onClick }: { f: Food; onClick: () => void }) {
       <div className="grow">
         <div className="title small">{f.fav ? '★ ' : ''}{f.name}</div>
         <div className="food-macros">
-          {f.brand ? <b>{f.brand} · </b> : ''}{f.kcal} kcal · B {num(f.p)} · W {num(f.c)} · T {num(f.f)} <span className="muted">/100 g</span>
+          {f.brand ? <b>{f.brand} · </b> : ''}
+          {f.incomplete ? <span className="muted">brak wartości – uzupełnij z etykiety</span> : <>{f.kcal} kcal · B {num(f.p)} · W {num(f.c)} · T {num(f.f)} <span className="muted">/100 g</span></>}
         </div>
       </div>
-      <Icon name="plus" className="chev" size={18} />
+      <Icon name={f.incomplete ? 'edit' : 'plus'} className="chev" size={18} />
     </button>
   )
 }
@@ -67,6 +74,8 @@ function SearchTab({ onPick }: { onPick: (f: Food) => void }) {
   const [q, setQ] = useState('')
   const [store, setStore] = useState('')
   const [big, setBig] = useState<Food[]>([])
+  // poprawione zapytanie, gdy oryginalne nic nie dało (literówki)
+  const [fixed, setFixed] = useState<string>()
   const [dbState, setDbState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [online, setOnline] = useState<Food[] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -82,14 +91,34 @@ function SearchTab({ onPick }: { onPick: (f: Food) => void }) {
   useEffect(() => {
     if (dbState !== 'ready' || (!q.trim() && !store)) {
       setBig([])
+      setFixed(undefined)
       return
     }
-    const t = setTimeout(() => void searchProducts(q, store).then(setBig), 150)
-    return () => clearTimeout(t)
+    let stale = false
+    const t = setTimeout(async () => {
+      let list = await searchProducts(q, store)
+      let fix: string | undefined
+      if (list.length < 5 && q.trim().length >= 3) {
+        fix = await correctQuery(q, LOCAL_FOODS.map((f) => f.name))
+        if (fix) {
+          const more = await searchProducts(fix, store)
+          const ids = new Set(list.map((f) => f.id))
+          list = [...list, ...more.filter((f) => !ids.has(f.id))]
+        }
+      }
+      if (!stale) {
+        setBig(list)
+        setFixed(fix)
+      }
+    }, 150)
+    return () => {
+      stale = true
+      clearTimeout(t)
+    }
   }, [q, store, dbState])
 
   const mine = useMemo(() => {
-    const words = queryStems(q)
+    const words = queryStems(fixed ?? q)
     if (store) return []
     const savedIds = new Set(saved.map((f) => f.id))
     if (!words.length) {
@@ -101,7 +130,7 @@ function SearchTab({ onPick }: { onPick: (f: Food) => void }) {
       .sort((a, b) => (b.f.fav ?? 0) - (a.f.fav ?? 0) || (b.f.lastUsed ? 1 : 0) - (a.f.lastUsed ? 1 : 0) || b.sc - a.sc)
       .slice(0, 30)
       .map((x) => x.f)
-  }, [q, saved, store])
+  }, [q, fixed, saved, store])
 
   const mineIds = new Set(mine.map((f) => f.id))
   const bigFiltered = big.filter((f) => !mineIds.has(f.id))
@@ -138,9 +167,10 @@ function SearchTab({ onPick }: { onPick: (f: Food) => void }) {
       {!q && !store && mine.length > 0 && <div className="section-title">Ostatnio używane i ulubione</div>}
       {!q && !store && mine.length === 0 && (
         <div className="card small muted">
-          Wpisz nazwę lub markę produktu. Przeszukuję ok. 12 tysięcy produktów ze sklepów oraz podstawowe produkty (warzywa, mięso, kasze) – działa także bez internetu.
+          Wpisz nazwę lub markę produktu. Przeszukuję ok. 16 tysięcy produktów ze sklepów oraz ok. 600 produktów podstawowych i dań – także bez internetu. Literówki poprawiam sama.
         </div>
       )}
+      {fixed && <div className="small muted">Pokazuję też wyniki dla: <b>{fixed}</b></div>}
       {mine.length > 0 && (
         <div className="card flush list">
           {mine.map((f) => <FoodRow key={f.id} f={f} onClick={() => onPick(f)} />)}
@@ -231,6 +261,9 @@ function ScanTab({ onPick }: { onPick: (f: Food) => void }) {
         <input className="input" inputMode="numeric" placeholder="Albo wpisz kod ręcznie" value={manual} onChange={(e) => setManual(e.target.value.replace(/\D/g, ''))} />
         <button className="btn" disabled={manual.length < 8}>Szukaj</button>
       </form>
+      <div className="tiny muted">
+        Aparat pyta o zgodę raz na uruchomienie aplikacji. Jeśli pyta za każdym razem: Ustawienia iPhone’a → Aplikacje → Safari → Aparat → „Zezwalaj”.
+      </div>
     </>
   )
 }
