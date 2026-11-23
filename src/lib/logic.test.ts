@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { EXERCISE_MAP } from '../data/exercises'
 import type { Profile, Workout, WorkoutExercise } from '../types'
 import { adaptiveTdee, bmr, computeTargets } from './nutrition'
+import { parseEstimate, photoPrompt, rescale } from './photoAi'
 import { e1rm, exerciseHistory, suggest } from './progression'
 import { weeklySets } from './stats'
 import { nextDay } from './workout'
@@ -103,5 +104,28 @@ describe('RIR w podpowiedziach', () => {
   })
   it('bez RIR – jak dotąd dokładamy powtórzenie', () => {
     expect(suggest(ex, 6, 10, [we(undefined)]).kind).toBe('reps')
+  })
+})
+
+describe('kalorie ze zdjęcia', () => {
+  it('czyta JSON z odpowiedzi czatu z tekstem i blokiem kodu', () => {
+    const e = parseEstimate('Oto wynik:\n```json\n{"items":[{"name":"ryż","grams":200,"kcal":260,"p":5,"f":0.6,"c":57},{"name":"kurczak","grams":"150","kcal":0,"p":"46,5","f":5,"c":0}],"note":"olej niepewny"}\n```\nSmacznego!')
+    expect(e?.items).toHaveLength(2)
+    expect(e?.items[1].p).toBe(46.5)
+    expect(e?.items[1].kcal).toBe(Math.round(46.5 * 4 + 5 * 9))
+    expect(e?.note).toBe('olej niepewny')
+  })
+  it('czyta samą tablicę i angielskie klucze', () => {
+    const e = parseEstimate('[{"name":"pizza","grams":300,"calories":800,"protein":30,"fat":30,"carbs":100}]')
+    expect(e?.items[0]).toMatchObject({ kcal: 800, p: 30, f: 30, c: 100 })
+  })
+  it('zwraca null bez wyniku', () => {
+    expect(parseEstimate('Nie widzę jedzenia na zdjęciu.')).toBeNull()
+  })
+  it('przelicza składnik po zmianie gramów', () => {
+    expect(rescale({ name: 'ryż', grams: 200, kcal: 260, p: 5, f: 0.6, c: 57 }, 100)).toMatchObject({ grams: 100, kcal: 130, p: 2.5, c: 28.5 })
+  })
+  it('polecenie zawiera wskazówkę', () => {
+    expect(photoPrompt('duży talerz')).toContain('duży talerz')
   })
 })

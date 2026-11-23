@@ -116,6 +116,24 @@ describe('nowe funkcje', () => {
     await act(async () => { await new Promise((res) => setTimeout(res, 500)) })
     expect(container.textContent).toMatch(/Pilos|Milbona/)
   })
+  it('zdjęcie AI: bez klucza – wklejona odpowiedź czatu trafia do dziennika', async () => {
+    URL.createObjectURL ??= () => 'blob:x'
+    URL.revokeObjectURL ??= () => {}
+    const { container, getByText, getByLabelText, getByRole } = await show('/dieta/dodaj?meal=2')
+    await act(async () => { getByText('Zdjęcie AI').click() })
+    expect(container.textContent).toContain('Zrób zdjęcie')
+    const input = container.querySelector('input[type=file]') as HTMLInputElement
+    await act(async () => { fireEvent.change(input, { target: { files: [new File(['x'], 'a.jpg', { type: 'image/jpeg' })] } }) })
+    await act(async () => { await new Promise((res) => setTimeout(res, 50)) })
+    expect(container.textContent).toContain('Wyślij do ChatGPT')
+    fireEvent.change(getByLabelText('Odpowiedź AI'), { target: { value: '{"items":[{"name":"Schabowy zdjęcie","grams":150,"kcal":400,"p":30,"f":25,"c":12}]}' } })
+    await act(async () => { getByRole('button', { name: 'Odczytaj' }).click() })
+    expect(container.textContent).toContain('400 kcal')
+    await act(async () => { getByText('Dodaj do dziennika').click() })
+    await act(async () => { await new Promise((res) => setTimeout(res, 50)) })
+    const rows = (await db.foodLog.toArray()).filter((r) => r.name === 'Schabowy zdjęcie')
+    expect(rows[0]).toMatchObject({ kcal: 400, grams: 150, meal: 2 })
+  })
   it('karta produktu pokazuje mikroskładniki i godzinę', async () => {
     const { container, getByPlaceholderText, findAllByText } = await show('/dieta/dodaj?meal=0')
     fireEvent.change(getByPlaceholderText(/skyr/), { target: { value: 'szpinak' } })

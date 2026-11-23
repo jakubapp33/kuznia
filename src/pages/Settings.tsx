@@ -5,6 +5,7 @@ import { Field, TopBar } from '../components/ui'
 import { TABLES, db, exportAll, importAll, setSetting } from '../db/db'
 import { isoDate } from '../lib/format'
 import { useSetting } from '../lib/hooks'
+import { GEMINI_KEY } from '../lib/photoAi'
 
 const PRINCIPLES = [
   ['Objętość', '10–20 serii roboczych tygodniowo na partię mięśniową. Na start wystarczy mniej (ok. 6–10).'],
@@ -21,6 +22,16 @@ export function Settings() {
   const rest = useSetting<{ compound: number; isolation: number }>('restDefaults') ?? { compound: 150, isolation: 75 }
   const [msg, setMsg] = useState<string | null>(null)
   const file = useRef<HTMLInputElement>(null)
+  const savedKey = useSetting<string>(GEMINI_KEY)
+  const [aiKey, setAiKey] = useState<string>()
+  const keyText = aiKey ?? savedKey ?? ''
+  const [keyMsg, setKeyMsg] = useState<string>()
+  async function saveKey(k: string) {
+    if (k) await setSetting(GEMINI_KEY, k)
+    else await db.settings.delete(GEMINI_KEY)
+    setAiKey(undefined)
+    setKeyMsg(k ? 'Klucz zapisany. Zakładka Zdjęcie AI liczy teraz od razu.' : 'Klucz usunięty.')
+  }
 
   async function doExport() {
     const data = await exportAll()
@@ -83,6 +94,23 @@ export function Settings() {
             {[45, 60, 75, 90, 120].map((s) => <option key={s} value={s}>{s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} min`}</option>)}
           </select>
         </Field>
+      </div>
+
+      <div className="section-title">Kalorie ze zdjęcia (AI)</div>
+      <div className="card stack">
+        <div className="small muted">Dieta → Dodaj → <b>Zdjęcie AI</b>. Z darmowym kluczem Google Gemini AI liczy od razu w aplikacji. Bez klucza też działa – przez ChatGPT lub Claude i wklejenie odpowiedzi.</div>
+        <ol className="steps small">
+          <li>Otwórz <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a> i zaloguj się kontem Google.</li>
+          <li>Stuknij <b>„Create API key”</b> i skopiuj klucz (zaczyna się od „AIza…”).</li>
+          <li>Wklej go tutaj i zapisz. Nie podawaj karty płatniczej – darmowy limit w zupełności wystarczy.</li>
+        </ol>
+        <input className="input" value={keyText} onChange={(e) => setAiKey(e.target.value)} placeholder="Klucz Gemini (AIza…)" aria-label="Klucz Gemini" autoComplete="off" autoCapitalize="off" spellCheck={false} />
+        <div className="grid2">
+          <button className="btn primary" disabled={keyText.trim() === (savedKey ?? '')} onClick={() => saveKey(keyText.trim())}>Zapisz klucz</button>
+          <button className="btn" disabled={!savedKey} onClick={() => saveKey('')}>Usuń klucz</button>
+        </div>
+        {keyMsg && <div className="note good small">{keyMsg}</div>}
+        <div className="tiny muted">Klucz jest zapisany tylko na tym telefonie. Zdjęcie trafia wtedy do Google; w darmowym planie Google może je wykorzystać do ulepszania swoich modeli – nie fotografuj niczego prywatnego.</div>
       </div>
 
       <div className="section-title">Kopia zapasowa</div>

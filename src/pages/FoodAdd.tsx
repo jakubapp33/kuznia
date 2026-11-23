@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { BarcodeScanner } from '../components/BarcodeScanner'
 import { Icon } from '../components/Icon'
 import { Nutrients } from '../components/Nutrients'
+import { PhotoTab } from '../components/PhotoTab'
 import { MacroTiles, NumInput, Seg, Sheet, TopBar } from '../components/ui'
 import { LOCAL_FOODS } from '../data/foods'
 import { db } from '../db/db'
@@ -16,7 +17,7 @@ import { fmtQty, unitLabel, unitsFor } from '../lib/units'
 import type { Food } from '../types'
 import { MEALS } from './Diet'
 
-type Tab = 'search' | 'scan' | 'quick'
+type Tab = 'search' | 'scan' | 'photo' | 'quick'
 
 export function FoodAdd() {
   const [params] = useSearchParams()
@@ -43,12 +44,14 @@ export function FoodAdd() {
         onChange={setTab}
         options={[
           { value: 'search', label: 'Szukaj' },
-          { value: 'scan', label: 'Skanuj kod' },
+          { value: 'scan', label: 'Kod' },
+          { value: 'photo', label: 'Zdjęcie AI' },
           { value: 'quick', label: 'Szybko' },
         ]}
       />
       {tab === 'search' && <SearchTab onPick={pick} />}
       {tab === 'scan' && <ScanTab onPick={pick} />}
+      {tab === 'photo' && <PhotoTab meal={meal} date={date} defaultTime={defaultTime} onDone={done} />}
       {tab === 'quick' && <QuickTab meal={meal} date={date} defaultTime={defaultTime} onDone={done} />}
       {picked && <AmountSheet food={picked} meal={meal} date={date} defaultTime={defaultTime} onClose={() => setPicked(null)} onDone={done} />}
     </div>
