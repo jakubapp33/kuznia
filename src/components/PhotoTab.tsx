@@ -133,11 +133,11 @@ export function PhotoTab({ meal, date, defaultTime, onDone }: { meal: number; da
                 Aby AI liczyła od razu w aplikacji, dodaj darmowy klucz Google Gemini w <Link to="/ustawienia">Ustawieniach</Link>. Bez klucza też się da – w 3 krokach:
               </div>
               <ol className="steps small">
-                <li>Stuknij <b>Wyślij do ChatGPT / Claude</b> i wybierz aplikację (zdjęcie i polecenie pójdą razem). Jeśli polecenie się nie wklei – wklej je sam, jest już skopiowane.</li>
+                <li>Stuknij <b>Wyślij do Gemini / ChatGPT / Claude</b> i wybierz aplikację (zdjęcie i polecenie pójdą razem). Jeśli polecenie się nie wklei – wklej je sam, jest już skopiowane.</li>
                 <li>Skopiuj całą odpowiedź AI.</li>
                 <li>Wklej ją poniżej i stuknij <b>Odczytaj</b>.</li>
               </ol>
-              <button className="btn primary block" onClick={shareToChat}>Wyślij do ChatGPT / Claude</button>
+              <button className="btn primary block" onClick={shareToChat}>Wyślij do Gemini / ChatGPT / Claude</button>
               <button className="btn ghost block" onClick={copyPrompt}><Icon name="copy" size={18} /> {copied ? 'Skopiowano polecenie' : 'Tylko skopiuj polecenie'}</button>
               <textarea className="input" rows={4} value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="Wklej tutaj odpowiedź AI" aria-label="Odpowiedź AI" />
               <button className="btn block" disabled={!pasted.trim()} onClick={readPasted}>Odczytaj</button>

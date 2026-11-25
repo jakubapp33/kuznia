@@ -125,7 +125,7 @@ describe('nowe funkcje', () => {
     const input = container.querySelector('input[type=file]') as HTMLInputElement
     await act(async () => { fireEvent.change(input, { target: { files: [new File(['x'], 'a.jpg', { type: 'image/jpeg' })] } }) })
     await act(async () => { await new Promise((res) => setTimeout(res, 50)) })
-    expect(container.textContent).toContain('Wyślij do ChatGPT')
+    expect(container.textContent).toContain('Wyślij do Gemini')
     fireEvent.change(getByLabelText('Odpowiedź AI'), { target: { value: '{"items":[{"name":"Schabowy zdjęcie","grams":150,"kcal":400,"p":30,"f":25,"c":12}]}' } })
     await act(async () => { getByRole('button', { name: 'Odczytaj' }).click() })
     expect(container.textContent).toContain('400 kcal')

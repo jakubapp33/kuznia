@@ -98,7 +98,7 @@ export function Settings() {
 
       <div className="section-title">Kalorie ze zdjęcia (AI)</div>
       <div className="card stack">
-        <div className="small muted">Dieta → Dodaj → <b>Zdjęcie AI</b>. Z darmowym kluczem Google Gemini AI liczy od razu w aplikacji. Bez klucza też działa – przez ChatGPT lub Claude i wklejenie odpowiedzi.</div>
+        <div className="small muted">Dieta → Dodaj → <b>Zdjęcie AI</b>. Z darmowym kluczem Google Gemini AI liczy od razu w aplikacji. Bez klucza też działa – przez aplikację Gemini, ChatGPT lub Claude i wklejenie odpowiedzi.</div>
         <ol className="steps small">
           <li>Otwórz <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a> i zaloguj się kontem Google.</li>
           <li>Stuknij <b>„Create API key”</b> i skopiuj klucz (zaczyna się od „AIza…”).</li>
